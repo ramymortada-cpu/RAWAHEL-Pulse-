@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { parse as parseCookie } from "cookie";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   listReports,
@@ -12,7 +11,6 @@ import {
   upsertDepartmentData,
   getSheetConfig,
   upsertSheetConfig,
-  setSheetAutoSync,
   getItemsByReport,
   upsertItem,
   deleteItem,
@@ -22,11 +20,6 @@ import { monthName } from "@shared/departments";
 import { ITEMS, normalizeItemMetrics } from "@shared/items";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
-import { COOKIE_NAME } from "@shared/const";
-import {
-  createHeartbeatJob,
-  deleteHeartbeatJob,
-} from "../_core/heartbeat";
 import {
   refreshSummary,
   parseSheetUrl,
@@ -398,44 +391,4 @@ export const reportsRouter = router({
       return { imported };
     }),
 
-  /* --------------- Monthly auto-sync (Heartbeat cron) --------------- */
-  setAutoSync: protectedProcedure
-    .input(z.object({ enabled: z.boolean() }))
-    .mutation(async ({ ctx, input }) => {
-      const cfg = await getSheetConfig(ctx.user.id);
-      if (!cfg) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "اربط Google Sheets أولًا قبل تفعيل المزامنة التلقائية",
-        });
-      }
-      const sessionToken =
-        parseCookie(ctx.req.headers.cookie ?? "")[COOKIE_NAME] ?? "";
-
-      if (input.enabled) {
-        // Create the monthly cron: 1st of each month at 06:00 UTC (09:00 KSA)
-        const job = await createHeartbeatJob(
-          {
-            name: `rawahel-monthly-sync-${ctx.user.id}`,
-            cron: "0 0 6 1 * *",
-            path: "/api/scheduled/monthlySync",
-            payload: {},
-            description: "مزامنة شهرية تلقائية لمؤشرات الكيانات من Google Sheets",
-          },
-          sessionToken
-        );
-        await setSheetAutoSync(ctx.user.id, true, job.taskUid);
-        return { enabled: true, nextExecutionAt: job.nextExecutionAt ?? null };
-      } else {
-        if (cfg.scheduleCronTaskUid) {
-          try {
-            await deleteHeartbeatJob(cfg.scheduleCronTaskUid, sessionToken);
-          } catch {
-            // ignore if already removed
-          }
-        }
-        await setSheetAutoSync(ctx.user.id, false, null);
-        return { enabled: false, nextExecutionAt: null };
-      }
-    }),
 });

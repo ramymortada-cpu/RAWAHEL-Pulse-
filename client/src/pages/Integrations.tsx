@@ -9,9 +9,7 @@ import {
   CheckCircle2,
   Link2,
   Info,
-  CalendarClock,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 
 export default function Integrations() {
   const utils = trpc.useUtils();
@@ -27,18 +25,6 @@ export default function Integrations() {
     onSuccess: () => {
       utils.reports.getSheetConfig.invalidate();
       toast.success("تم ربط Google Sheets بنجاح");
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const autoSyncMutation = trpc.reports.setAutoSync.useMutation({
-    onSuccess: (res) => {
-      utils.reports.getSheetConfig.invalidate();
-      toast.success(
-        res.enabled
-          ? "تم تفعيل المزامنة الشهرية التلقائية"
-          : "تم إيقاف المزامنة الشهرية التلقائية"
-      );
     },
     onError: (e) => toast.error(e.message),
   });
@@ -107,43 +93,6 @@ export default function Integrations() {
                 )}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Monthly auto-sync */}
-        {cfg?.sheetId && (
-          <div className="mt-6 rounded-2xl bg-card border border-border/60 p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#d4a843]/15 text-[#d4a843] shrink-0">
-                  <CalendarClock className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-[#1b2a5e]">
-                    المزامنة الشهرية التلقائية
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                    عند التفعيل، يتم سحب مؤشرات الكيانات من الجدول وإنشاء/تحديث
-                    تقرير الشهر الحالي تلقائيًا أول كل شهر (الساعة 9 صباحًا
-                    بتوقيت السعودية).
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={!!cfg?.autoSync}
-                disabled={autoSyncMutation.isPending}
-                onCheckedChange={(checked) =>
-                  autoSyncMutation.mutate({ enabled: checked })
-                }
-              />
-            </div>
-            <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>
-                تعمل المزامنة التلقائية بعد نشر التطبيق (Deploy) فقط. إن لم
-                تنشر التطبيق بعد، فعّلها بعد النشر.
-              </span>
-            </div>
           </div>
         )}
 
