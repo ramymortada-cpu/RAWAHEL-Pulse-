@@ -1,0 +1,124 @@
+# RAWAHEL Pulse — نبض رواحل
+
+RAWAHEL Pulse is an Arabic-first impact measurement and reporting system for Rawahel Foundation. It turns the old monthly infographic demo into a flexible MVP for strategic tracks, strategic goals, execution entities, KPI entry, evidence links, premium report preview, and PDF/PNG export.
+
+## Product Scope
+
+- Arabic-first RTL interface.
+- Flexible entity management: offices, institutes, initiatives, projects, units, departments, campaigns, and platforms.
+- Strategic tracks and goals linked to entities.
+- Entity-specific KPI presets plus custom KPI definitions.
+- Monthly, quarterly, semiannual, and annual report periods.
+- Report audiences: internal, donor, board, and public.
+- Evidence/story links for donor-facing reporting.
+- Three report templates: Monthly, Donor, and Annual.
+- Premium report preview with browser-side PDF and PNG export.
+- Entity-first report entry, entity details, and goal details.
+- Backward compatibility with legacy department data for older reports.
+
+## Run Locally
+
+```bash
+pnpm install
+pnpm check
+pnpm test
+pnpm build
+pnpm dev
+```
+
+RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugin, or injected browser debug assets. If OAuth environment variables are absent, the server provides a local admin session for MVP/demo operation.
+
+## How To Add A New Entity
+
+1. Open `/pulse` or choose **نبض رواحل** from the sidebar.
+2. Fill in the Arabic name, stable slug, type, owner, and description.
+3. Select linked **المسارات الاستراتيجية** and **الأهداف الاستراتيجية**.
+4. Click **إضافة كيان**.
+5. Archived entities stop appearing in active entry lists, while historical report data remains preserved.
+
+## How To Add A KPI
+
+1. Open `/pulse`.
+2. Select the target entity.
+3. Enter the KPI Arabic label, stable key, and unit.
+4. Click **إضافة KPI للكيان المحدد**.
+5. The KPI appears in the monthly entry form for that entity.
+
+## How To Create A Report
+
+1. Open `/reports`.
+2. Click **تقرير جديد**.
+3. Select month, year, period type, and audience.
+4. Open the report detail page, select the entity, then enter KPI values.
+
+## How To Add Evidence
+
+1. Open `/pulse`.
+2. Select the report and entity.
+3. Add a title, URL, description, and evidence type.
+4. Evidence can be donor-facing and contributes to the Pulse dashboard totals.
+
+## How To Export PDF/PNG
+
+1. Open a report preview.
+2. Use **تصدير PDF** or **تصدير صورة PNG**.
+3. Export works locally in the browser.
+4. External storage upload is best-effort only and is not required for MVP operation.
+
+## Google Sheets Format
+
+The current RAWAHEL Pulse import format is:
+
+```csv
+period,entity_key,metric_key,value,notes,source
+2026-06,scientific_office,total_beneficiaries,1200,Monthly beneficiaries,sheet
+2026-06,media_communications,content_produced,42,Published assets,sheet
+```
+
+`period` is accepted for traceability, while the report page you sync from controls the destination report. Legacy `department_key,metric_key,value` sheets are still accepted for older report data.
+
+## Database Model
+
+Legacy demo tables remain intact:
+
+- `reports`
+- `department_data`
+- `department_items`
+- `sheet_config`
+
+RAWAHEL Pulse adds:
+
+- `strategic_tracks`
+- `strategic_goals`
+- `entities`
+- `entity_track_links`
+- `entity_goal_links`
+- `metric_definitions`
+- `metric_values`
+- `evidence_assets`
+- `report_exports`
+
+Seed data and KPI presets live in `shared/masterData.ts`. When no database is configured, the app uses an in-memory seed so the UI can still be reviewed.
+
+## Migration Strategy
+
+- Existing reports and department data are preserved.
+- New features use the flexible Pulse master data model.
+- Primary screens are now entity-first, with legacy department rollups retained for older comparisons.
+- Google Sheets import remains optional; manual entry works without Sheets.
+
+## Roles
+
+- `admin`: manages entities, goals, KPI definitions, and seed data.
+- `editor`: enters KPI values, evidence, and records exports.
+- `viewer`: reads dashboards, reports, entity detail, and goal detail.
+
+## Verification
+
+Current verification commands:
+
+```bash
+pnpm check
+pnpm test
+pnpm build
+```

@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1780399658524,
+      "tag": "0000_short_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1780399829483,
+      "tag": "0001_workable_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1780409703722,
+      "tag": "0002_overrated_kid_colt",
+      "breakpoints": true
+    }
+  ]
+}
