@@ -20,7 +20,12 @@ export async function createContext(
     user = null;
   }
 
-  if (!user && !process.env.OAUTH_SERVER_URL) {
+  const allowLocalAdminFallback =
+    process.env.NODE_ENV !== "production" &&
+    !process.env.OAUTH_SERVER_URL &&
+    process.env.RAWAHEL_DISABLE_LOCAL_ADMIN_FALLBACK !== "1";
+
+  if (!user && allowLocalAdminFallback) {
     const timestamp = new Date();
     user = {
       id: 1,

@@ -24,6 +24,7 @@ import {
   linkPulseEntityToTracks,
   listPulseSubmissionLinks,
   regeneratePulseSubmissionLink,
+  rejectPulseSubmission,
   requestPulseSubmissionRevision,
   revokePulseSubmissionLink,
   savePulseSubmission,
@@ -59,6 +60,8 @@ const submissionEvidenceSchema = z.object({
   url: z.string().optional().default(""),
   type: z.enum(["image", "video", "link", "document", "testimonial", "story"]).default("link"),
   isDonorFacing: z.boolean().default(true),
+  isFeatured: z.boolean().default(false),
+  featuredOrder: z.number().nullable().optional(),
 });
 const submissionPayloadSchema = z.object({
   token: z.string().min(16),
@@ -194,6 +197,22 @@ export const pulseRouter = router({
         resourceType: "submission_link",
         resourceId: String(input.id),
         summaryAr: "تم طلب تعديل على إدخال خارجي.",
+      });
+      return { success: true };
+    }),
+
+  rejectSubmission: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await rejectPulseSubmission(input.id, ctx.user!.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission.rejected",
+        resourceType: "submission_link",
+        resourceId: String(input.id),
+        summaryAr: "تم رفض إدخال خارجي واستبعاد قيمه وشواهده من التقارير الرسمية.",
       });
       return { success: true };
     }),
@@ -426,6 +445,8 @@ export const pulseRouter = router({
         aggregationScope: metricScopeSchema.default("additive"),
         isCore: z.boolean().default(false),
         isDonorFacing: z.boolean().default(true),
+        isFeatured: z.boolean().default(false),
+        featuredOrder: z.number().nullable().optional(),
         sortOrder: z.number().default(0),
       })
     )
@@ -544,6 +565,8 @@ export const pulseRouter = router({
         type: z.enum(["image", "video", "link", "document", "testimonial", "story"]).default("link"),
         url: z.string().min(2),
         isDonorFacing: z.boolean().default(true),
+        isFeatured: z.boolean().default(false),
+        featuredOrder: z.number().nullable().optional(),
         sortOrder: z.number().default(0),
       })
     )
@@ -557,6 +580,8 @@ export const pulseRouter = router({
         type: input.type,
         url: input.url,
         isDonorFacing: input.isDonorFacing,
+        isFeatured: input.isFeatured,
+        featuredOrder: input.featuredOrder ?? null,
         sortOrder: input.sortOrder,
       });
       return { id };

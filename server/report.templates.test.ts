@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Infographic, type InfographicData } from "../client/src/components/infographic/Infographic";
+import { pulseExportFileName } from "@shared/pulse";
 
 globalThis.React = React;
 
@@ -90,5 +91,14 @@ describe("RAWAHEL Pulse report templates", () => {
     expect(previewSource).toContain("التقرير الاستراتيجي");
     expect(previewSource).toContain("تصدير صورة PNG");
     expect(previewSource).toContain("تصدير PDF");
+  });
+
+  it("generates clean PDF and PNG export filenames", () => {
+    expect(pulseExportFileName("donor", "2026-06", "pdf")).toBe(
+      "rawahel-pulse-donor-2026-06.pdf"
+    );
+    expect(pulseExportFileName("annual", "2026-06", "png")).toBe(
+      "rawahel-pulse-annual-2026-06.png"
+    );
   });
 });

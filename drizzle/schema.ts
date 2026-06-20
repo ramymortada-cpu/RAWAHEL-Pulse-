@@ -284,6 +284,8 @@ export const evidenceAssets = mysqlTable("evidence_assets", {
   url: varchar("url", { length: 1024 }).notNull(),
   fileKey: varchar("fileKey", { length: 512 }),
   isDonorFacing: boolean("isDonorFacing").default(true).notNull(),
+  isFeatured: boolean("isFeatured").default(false).notNull(),
+  featuredOrder: int("featuredOrder"),
   submissionLinkId: int("submissionLinkId"),
   submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved", "rejected", "archived"]).default("approved").notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
@@ -330,6 +332,24 @@ export const reportExports = mysqlTable("report_exports", {
 
 export type ReportExport = typeof reportExports.$inferSelect;
 export type InsertReportExport = typeof reportExports.$inferInsert;
+
+export const systemSettings = mysqlTable("system_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  foundationName: varchar("foundationName", { length: 255 }).default("RAWAHEL").notNull(),
+  displayNameAr: varchar("displayNameAr", { length: 255 }).default("نبض رواحل").notNull(),
+  logoUrl: varchar("logoUrl", { length: 1024 }),
+  primaryColor: varchar("primaryColor", { length: 32 }).default("#1b2a5e").notNull(),
+  accentColor: varchar("accentColor", { length: 32 }).default("#d4a843").notNull(),
+  reportDisclaimer: text("reportDisclaimer"),
+  defaultSubmissionExpiryDays: int("defaultSubmissionExpiryDays").default(30).notNull(),
+  externalSubmissionBaseUrl: varchar("externalSubmissionBaseUrl", { length: 1024 }),
+  localExportFallbackEnabled: boolean("localExportFallbackEnabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SystemSettings = typeof systemSettings.$inferSelect;
+export type InsertSystemSettings = typeof systemSettings.$inferInsert;
 
 export const auditLogs = mysqlTable("audit_logs", {
   id: int("id").autoincrement().primaryKey(),

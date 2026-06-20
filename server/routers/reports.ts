@@ -3,6 +3,8 @@ import { permissionProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
   archiveReport,
   cancelReport,
+  duplicateReport,
+  lockReport,
   listReports,
   getReport,
   findReportByPeriod,
@@ -233,6 +235,51 @@ export const reportsRouter = router({
         metadataJson: { reason: input.reason },
       });
       return { success: true };
+    }),
+
+  lock: permissionProcedure("report:archive")
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const report = await getReport(ctx.user!.id, input.id);
+      if (!report) throw new TRPCError({ code: "NOT_FOUND" });
+      await lockReport(ctx.user!.id, input.id, ctx.user!.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.locked",
+        resourceType: "report",
+        resourceId: String(input.id),
+        summaryAr: `تم قفل التقرير: ${report.title}`,
+      });
+      return { success: true };
+    }),
+
+  duplicate: permissionProcedure("report:create")
+    .input(z.object({
+      id: z.number(),
+      title: z.string().optional(),
+      year: z.number().optional(),
+      month: z.number().min(1).max(12).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const id = await duplicateReport(ctx.user!.id, input.id, {
+        title: input.title,
+        year: input.year,
+        month: input.month,
+      });
+      if (!id) throw new TRPCError({ code: "NOT_FOUND" });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.duplicated",
+        resourceType: "report",
+        resourceId: String(id),
+        summaryAr: "تم تكرار تقرير لاستخدامه كنقطة بداية لفترة جديدة.",
+        metadataJson: { sourceReportId: input.id },
+      });
+      return { id };
     }),
 
   saveDepartment: permissionProcedure("report:update")

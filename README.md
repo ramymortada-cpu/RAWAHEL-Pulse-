@@ -1,6 +1,6 @@
 # RAWAHEL Pulse — نبض رواحل
 
-RAWAHEL Pulse is an Arabic-first impact measurement and reporting system for Rawahel Foundation. It turns the old monthly infographic demo into a flexible MVP for strategic tracks, strategic goals, execution entities, KPI entry, evidence links, premium report preview, and PDF/PNG export.
+RAWAHEL Pulse is an Arabic-first impact measurement and reporting system for Rawahel Foundation. It turns the old monthly infographic demo into a full operational solution for strategic tracks, strategic goals, execution entities, KPI entry, evidence links, premium report preview, and PDF/PNG export.
 
 ## Product Scope
 
@@ -27,7 +27,7 @@ pnpm build
 pnpm dev
 ```
 
-RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugin, or injected browser debug assets. If OAuth environment variables are absent, the server provides a local admin session for MVP/demo operation.
+RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugin, or injected browser debug assets. If OAuth environment variables are absent in non-production, the server provides a local admin session for development/review operation.
 
 ## How To Add A New Entity
 
@@ -64,7 +64,7 @@ RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugi
 1. Open a report preview.
 2. Use **تصدير PDF** or **تصدير صورة PNG**.
 3. Export works locally in the browser.
-4. External storage upload is best-effort only and is not required for MVP operation.
+4. External storage upload is best-effort only and is not required for full local export operation.
 
 ## Google Sheets Format
 
@@ -123,6 +123,158 @@ pnpm check
 pnpm test
 pnpm build
 ```
+
+## Operator Guide
+
+### 1. How To Login As Admin
+
+1. In production, configure `OAUTH_SERVER_URL`, `VITE_OAUTH_PORTAL_URL`, `VITE_APP_ID`, and `JWT_SECRET`.
+2. Open the deployed RAWAHEL Pulse URL.
+3. Click **الدخول إلى نبض رواحل**.
+4. Sign in through the configured OAuth portal.
+5. Confirm the user has one of the internal roles: `super_admin`, `admin`, `editor`, or `viewer`.
+
+Local development note: when `NODE_ENV` is not `production`, `OAUTH_SERVER_URL` is absent, and `RAWAHEL_DISABLE_LOCAL_ADMIN_FALLBACK` is not `1`, the server provides a local `super_admin` session for demo/review only. Production does not grant this fallback.
+
+### 2. How To Create/Edit An Entity
+
+1. Open `/pulse#entities`.
+2. Enter the Arabic entity name, stable key, entity type, owner name, color/icon, and description.
+3. Select linked strategic tracks and goals.
+4. Save the entity.
+5. To edit, update the entity details from the same admin screen.
+6. To archive, use the archive action. Archived entities stop appearing in active entry lists while historical records remain preserved.
+
+### 3. How To Create A Report Period
+
+1. Open `/reports`.
+2. Click **تقرير جديد**.
+3. Select year, month, period type, audience, and title if needed.
+4. Save the report.
+5. Open the report detail page to enter or review data.
+
+### 4. How To Generate An External Submission Link
+
+1. Open `/pulse/submission-links`.
+2. Choose the target report period.
+3. Choose the target entity.
+4. Enter manager name and optional email/phone.
+5. Click **إنشاء رابط خاص**.
+6. Copy the generated `/submit/:token` URL immediately. RAWAHEL Pulse stores only the token hash, not the raw token.
+
+### 5. How A Manager Submits Data
+
+1. The manager opens `/submit/:token`.
+2. The external page is standalone and has no sidebar, dashboard, admin, or internal navigation links.
+3. The manager sees only the entity/report scoped to that token.
+4. The manager enters KPI values, achievements, operational notes, support needs, and optional evidence/story links.
+5. The manager may save a draft or submit final data.
+
+### 6. How Admin Reviews And Approves Data
+
+1. Open `/pulse/submission-links`.
+2. Select the submitted link review action.
+3. Review KPI values and donor-facing evidence.
+4. Click approve to include the submission in official dashboard/donor report calculations.
+5. Request revision when data needs correction.
+6. Reject a submission when it should be preserved for audit but excluded from official calculations. Draft/submitted/rejected/non-approved external values do not enter official reports.
+
+### 6.1 How To Create A KPI And Link It To A Goal
+
+1. Open `/pulse#metrics`.
+2. Create the KPI definition with Arabic name, unit, aggregation, donor-facing flag, and entity scope.
+3. In the goal-linking area, select the strategic goal.
+4. Choose only the KPI definitions that should contribute to this goal.
+5. Save the mapping. Goal progress will be calculated only from explicit `goal_metric_links`.
+
+### 7. How To Edit An Approved Value Safely
+
+1. Use an `admin` or `super_admin` account.
+2. Open the relevant approved metric value from the Pulse/admin workflow.
+3. Enter the corrected value and a clear change reason.
+4. Save the edit.
+5. The audit log records previous and current values with the reason. Edits without a reason are rejected.
+
+### 8. How To Archive/Cancel A Report
+
+1. Open `/admin`.
+2. In report management, choose **أرشفة التقرير** to preserve it outside active lists.
+3. Choose **إلغاء التقرير** when a report period should not be used.
+4. Choose **قفل التقرير** when the report is finalized and should not receive normal operational edits.
+5. Choose **تكرار** to copy a report structure into a new draft period.
+6. Archived/cancelled reports are hidden from active report lists but remain available when inactive reports are explicitly requested.
+
+### 8.1 How To Manage Settings And Audit Log
+
+1. Open `/admin`.
+2. Update foundation name, Arabic display name, report colors, disclaimer, external submission base URL, and default link expiry from **الإعدادات والهوية**.
+3. Only `super_admin` can change system settings.
+4. Use **سجل العمليات** filters for actor, action, and resource type when auditing sensitive operations.
+
+### 9. How To Export Donor PDF/PNG
+
+1. Open a report preview at `/reports/:id/preview`.
+2. Select **تقرير أثر الداعمين**.
+3. Confirm the preview is using approved donor-facing data only.
+4. Click **تصدير PDF** or **تصدير صورة PNG**.
+5. The browser downloads a local export. Optional remote storage upload is best-effort and not required for full local export operation.
+
+### 10. Role Permissions Summary
+
+| Role | Summary |
+|---|---|
+| `super_admin` | All permissions, including user management and report deletion. |
+| `admin` | Manage reports, entities, strategy, KPIs, approvals, approved-value edits, audit log, and exports. Cannot manage users. |
+| `editor` | Create/update reports, enter metric values/evidence, and create exports. Cannot approve submissions or edit approved values. |
+| `viewer` | Read-only access to authenticated dashboards/reports. Cannot edit, approve, export, or manage users. |
+
+Server-side permission checks are enforced through `permissionProcedure`, `adminProcedure`, `editorProcedure`, and `protectedProcedure`.
+
+### 11. Required Environment Variables
+
+| Variable | Required | Notes |
+|---|---:|---|
+| `NODE_ENV` | Yes | Use `production` in production. |
+| `JWT_SECRET` | Yes in production | Signs/verifies session cookies. Do not use the local fallback secret in production. |
+| `DATABASE_URL` | Recommended/production | MySQL connection. Without it, local in-memory data is used for demo/review. |
+| `OAUTH_SERVER_URL` | Production auth | OAuth backend URL. Absence disables OAuth and only allows local fallback outside production. |
+| `VITE_OAUTH_PORTAL_URL` | Production auth UI | Frontend OAuth portal base URL. |
+| `VITE_APP_ID` | Production auth | OAuth app/project id. |
+| `OWNER_OPEN_ID` | Optional | Owner/bootstrap identity when used by deployment process. |
+| `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` | Optional | Remote export storage presign/upload service. Local browser export works without these. |
+| `EXTERNAL_SUBMISSION_BASE_URL` | Recommended | Public base URL used by operators when sharing `/submit/:token` links. |
+| `RAWAHEL_DISABLE_LOCAL_ADMIN_FALLBACK` | Optional | Set to `1` to disable the non-production local admin fallback. |
+
+### 12. Local Export Fallback Behavior
+
+PDF and PNG exports are generated in the browser. If remote storage is not configured or upload fails, the local file still downloads and the UI shows the local export result. This fallback is intentional for full solution readiness because report export must keep working without optional storage.
+
+### 13. Production Deployment Notes
+
+- Run database migrations before deployment.
+- Seed baseline Pulse data before first operator use.
+- Create/verify at least one active `super_admin`.
+- Configure auth/session secrets before exposing `/admin` or `/pulse`.
+- Configure `EXTERNAL_SUBMISSION_BASE_URL` for manager links.
+- Confirm `NODE_ENV=production` so local admin fallback is disabled.
+- Run `pnpm check`, `pnpm test`, and `pnpm build` before release.
+- Verify no Manus/WZZRD runtime dependency is required.
+- Verify no raw external submission tokens are logged or stored.
+- Verify official dashboards/reports use approved data only.
+
+## Deployment Readiness Checklist
+
+- [ ] Database migrations applied.
+- [ ] Seed data loaded.
+- [ ] Super Admin user exists.
+- [ ] Auth/session secret configured.
+- [ ] Storage environment variables are optional and documented.
+- [ ] Export local fallback documented.
+- [ ] External submission base URL configured.
+- [ ] Production build passes.
+- [ ] No Manus/WZZRD dependencies are required at runtime.
+- [ ] No raw tokens are logged or stored.
+- [ ] No fake/draft/unapproved data appears in official reports.
 
 ## Admin Workflow — Premium Product Finish
 

@@ -31,10 +31,13 @@ import {
   departmentData,
   departmentItems,
   sheetConfig,
+  systemSettings,
   type InsertReport,
   type InsertDepartmentData,
   type InsertDepartmentItem,
   type InsertSheetConfig,
+  type InsertSystemSettings,
+  type SystemSettings,
   type User,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -233,6 +236,59 @@ export async function listAuditLogs() {
   return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
 }
 
+function defaultSystemSettings(): SystemSettings {
+  const timestamp = now();
+  return {
+    id: 1,
+    foundationName: "RAWAHEL",
+    displayNameAr: "نبض رواحل",
+    logoUrl: null,
+    primaryColor: "#1b2a5e",
+    accentColor: "#d4a843",
+    reportDisclaimer: "تعتمد هذه الأرقام على بيانات معتمدة من إدارة رواحل خلال الفترة المحددة.",
+    defaultSubmissionExpiryDays: 30,
+    externalSubmissionBaseUrl: null,
+    localExportFallbackEnabled: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export async function getSystemSettings() {
+  const db = await getDb();
+  if (!db) {
+    localSystemSettings ??= defaultSystemSettings();
+    return localSystemSettings;
+  }
+  const rows = await db.select().from(systemSettings).limit(1);
+  if (rows[0]) return rows[0];
+  const defaults = defaultSystemSettings();
+  await db.insert(systemSettings).values({
+    foundationName: defaults.foundationName,
+    displayNameAr: defaults.displayNameAr,
+    logoUrl: defaults.logoUrl,
+    primaryColor: defaults.primaryColor,
+    accentColor: defaults.accentColor,
+    reportDisclaimer: defaults.reportDisclaimer,
+    defaultSubmissionExpiryDays: defaults.defaultSubmissionExpiryDays,
+    externalSubmissionBaseUrl: defaults.externalSubmissionBaseUrl,
+    localExportFallbackEnabled: defaults.localExportFallbackEnabled,
+  });
+  const created = await db.select().from(systemSettings).limit(1);
+  return created[0] ?? defaults;
+}
+
+export async function updateSystemSettings(patch: Partial<InsertSystemSettings>) {
+  const db = await getDb();
+  const current = await getSystemSettings();
+  if (!db) {
+    localSystemSettings = { ...current, ...patch, id: current.id, updatedAt: now() };
+    return localSystemSettings;
+  }
+  await db.update(systemSettings).set(patch).where(eq(systemSettings.id, current.id));
+  return getSystemSettings();
+}
+
 /* ---------------------- Reports ---------------------- */
 
 type ReportRow = typeof reports.$inferSelect;
@@ -245,6 +301,7 @@ const localDepartmentData: DepartmentDataRow[] = [];
 const localDepartmentItems: DepartmentItemRow[] = [];
 const localUsers: User[] = [];
 const localAuditLogs: AuditLogRow[] = [];
+let localSystemSettings: SystemSettings | null = null;
 let localReportId = 1_000;
 
 export async function listReports(ownerId: number, options: { includeInactive?: boolean } = {}) {
@@ -368,6 +425,75 @@ export async function lockReport(ownerId: number, id: number, actorUserId: numbe
     lockedAt,
     lockedByUserId: actorUserId,
   });
+}
+
+export async function duplicateReport(ownerId: number, id: number, patch: {
+  title?: string;
+  year?: number;
+  month?: number;
+}) {
+  const original = await getReport(ownerId, id);
+  if (!original) return undefined;
+  const newId = await createReport({
+    ownerId,
+    title: patch.title?.trim() || `${original.title} - نسخة`,
+    year: patch.year ?? original.year,
+    month: patch.month ?? original.month,
+    periodType: original.periodType,
+    audience: original.audience,
+    status: "draft",
+    summary: original.summary,
+  });
+  const db = await getDb();
+  if (!db) {
+    const createdAt = now();
+    localDepartmentData
+      .filter((row) => row.reportId === original.id)
+      .forEach((row) => {
+        localDepartmentData.push({
+          ...row,
+          id: nextPulseId(),
+          reportId: newId,
+          createdAt,
+          updatedAt: createdAt,
+        });
+      });
+    localDepartmentItems
+      .filter((row) => row.reportId === original.id)
+      .forEach((row) => {
+        localDepartmentItems.push({
+          ...row,
+          id: nextPulseId(),
+          reportId: newId,
+          createdAt,
+          updatedAt: createdAt,
+        });
+      });
+    return newId;
+  }
+  const [deps, items] = await Promise.all([getDepartmentData(original.id), getItemsByReport(original.id)]);
+  for (const row of deps) {
+    await db.insert(departmentData).values({
+      reportId: newId,
+      departmentKey: row.departmentKey,
+      metrics: row.metrics,
+      achievements: row.achievements,
+      notes: row.notes,
+    });
+  }
+  for (const row of items) {
+    await db.insert(departmentItems).values({
+      reportId: newId,
+      departmentKey: row.departmentKey,
+      itemKey: row.itemKey,
+      itemNameAr: row.itemNameAr,
+      itemType: row.itemType,
+      metrics: row.metrics,
+      notes: row.notes,
+      sortOrder: row.sortOrder,
+    });
+  }
+  return newId;
 }
 
 export async function deleteReport(ownerId: number, id: number) {
@@ -1333,6 +1459,8 @@ export async function createPulseEvidence(data: InsertEvidenceAsset) {
       url: data.url,
       fileKey: data.fileKey ?? null,
       isDonorFacing: data.isDonorFacing ?? true,
+      isFeatured: data.isFeatured ?? false,
+      featuredOrder: data.featuredOrder ?? null,
       submissionLinkId: data.submissionLinkId ?? null,
       submissionStatus: data.submissionStatus ?? "approved" as const,
       sortOrder: data.sortOrder ?? cache.evidenceAssets.length + 1,
@@ -1547,7 +1675,7 @@ export async function savePulseSubmission(token: string, data: {
   achievements?: string[];
   operationsNotes?: string | null;
   supportNeeded?: string | null;
-  evidence?: Array<{ titleAr: string; descriptionAr?: string | null; url: string; type?: "image" | "video" | "link" | "document" | "testimonial" | "story"; isDonorFacing?: boolean }>;
+  evidence?: Array<{ titleAr: string; descriptionAr?: string | null; url: string; type?: "image" | "video" | "link" | "document" | "testimonial" | "story"; isDonorFacing?: boolean; isFeatured?: boolean; featuredOrder?: number | null }>;
   final?: boolean;
 }) {
   const link = await getSubmissionLinkByToken(token);
@@ -1603,6 +1731,8 @@ export async function savePulseSubmission(token: string, data: {
       type: item.type ?? "link",
       url: item.url,
       isDonorFacing: item.isDonorFacing ?? true,
+      isFeatured: item.isFeatured ?? false,
+      featuredOrder: item.featuredOrder ?? null,
       submissionLinkId: link.id,
       submissionStatus: status,
       sortOrder: 0,
@@ -1645,6 +1775,26 @@ export async function requestPulseSubmissionRevision(id: number) {
     return;
   }
   await db.update(submissionLinks).set({ status: "needs_revision", reviewedAt: now() }).where(eq(submissionLinks.id, id));
+}
+
+export async function rejectPulseSubmission(id: number, reviewedByUserId: number) {
+  const reviewedAt = now();
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const link = cache.submissionLinks.find((item) => item.id === id);
+    if (link) Object.assign(link, { status: "reviewed" as const, reviewedAt, updatedAt: reviewedAt });
+    cache.metricValues
+      .filter((value) => value.submissionLinkId === id)
+      .forEach((value) => Object.assign(value, { submissionStatus: "rejected" as const, reviewedByUserId, reviewedAt, updatedAt: reviewedAt }));
+    cache.evidenceAssets
+      .filter((item) => item.submissionLinkId === id)
+      .forEach((item) => Object.assign(item, { submissionStatus: "rejected" as const, updatedAt: reviewedAt }));
+    return;
+  }
+  await db.update(submissionLinks).set({ status: "reviewed", reviewedAt }).where(eq(submissionLinks.id, id));
+  await db.update(metricValues).set({ submissionStatus: "rejected", reviewedByUserId, reviewedAt }).where(eq(metricValues.submissionLinkId, id));
+  await db.update(evidenceAssets).set({ submissionStatus: "rejected" }).where(eq(evidenceAssets.submissionLinkId, id));
 }
 
 export async function createPulseReportExport(data: InsertReportExport) {
@@ -1757,7 +1907,10 @@ export async function getPulseDashboard(reportId?: number) {
     activeEntities,
     entityHighlights,
     missingSubmissions,
-    donorReadyHighlights: evidence.filter((item) => item.isDonorFacing).slice(0, 6),
+    donorReadyHighlights: evidence
+      .filter((item) => item.isDonorFacing)
+      .sort((a, b) => Number(b.isFeatured) - Number(a.isFeatured) || Number(a.featuredOrder ?? 999) - Number(b.featuredOrder ?? 999) || a.sortOrder - b.sortOrder)
+      .slice(0, 6),
     evidence,
   };
 }

@@ -3,10 +3,12 @@ import { permissionProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
   createAuditLog,
   createInternalUser,
+  getSystemSettings,
   getPulseDashboard,
   listAuditLogs,
   listReports,
   listUsers,
+  updateSystemSettings,
   updateInternalUser,
 } from "../db";
 
@@ -79,5 +81,52 @@ export const adminRouter = router({
       return { success: true };
     }),
 
-  auditLog: permissionProcedure("audit:view").query(() => listAuditLogs()),
+  settings: protectedProcedure.query(() => getSystemSettings()),
+
+  updateSettings: permissionProcedure("settings:manage")
+    .input(z.object({
+      foundationName: z.string().min(2).optional(),
+      displayNameAr: z.string().min(2).optional(),
+      logoUrl: z.string().url().nullable().optional().or(z.literal("")),
+      primaryColor: z.string().min(3).optional(),
+      accentColor: z.string().min(3).optional(),
+      reportDisclaimer: z.string().nullable().optional(),
+      defaultSubmissionExpiryDays: z.number().min(1).max(365).optional(),
+      externalSubmissionBaseUrl: z.string().url().nullable().optional().or(z.literal("")),
+      localExportFallbackEnabled: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const settings = await updateSystemSettings({
+        ...input,
+        logoUrl: input.logoUrl || null,
+        externalSubmissionBaseUrl: input.externalSubmissionBaseUrl || null,
+      });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "settings.updated",
+        resourceType: "settings",
+        resourceId: String(settings.id),
+        summaryAr: "تم تحديث إعدادات المؤسسة والتقارير.",
+        metadataJson: input,
+      });
+      return settings;
+    }),
+
+  auditLog: permissionProcedure("audit:view")
+    .input(z.object({
+      actor: z.string().optional(),
+      action: z.string().optional(),
+      resourceType: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const rows = await listAuditLogs();
+      return rows.filter((item) => {
+        if (input?.actor && !(item.actorName ?? "").includes(input.actor)) return false;
+        if (input?.action && !item.action.includes(input.action)) return false;
+        if (input?.resourceType && item.resourceType !== input.resourceType) return false;
+        return true;
+      });
+    }),
 });

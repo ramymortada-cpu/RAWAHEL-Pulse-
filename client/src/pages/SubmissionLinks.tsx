@@ -15,6 +15,7 @@ const statusLabels: Record<string, string> = {
   submitted: "تم الإرسال",
   needs_revision: "يحتاج مراجعة",
   reviewed: "تمت المراجعة",
+  rejected: "مرفوض",
   approved: "معتمد",
   revoked: "ملغي",
   expired: "منتهي",
@@ -26,6 +27,7 @@ const statusClasses: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-800",
   needs_revision: "bg-orange-100 text-orange-800",
   revoked: "bg-red-100 text-red-800",
+  rejected: "bg-red-100 text-red-800",
   expired: "bg-zinc-100 text-zinc-700",
   opened: "bg-blue-100 text-blue-800",
   created: "bg-slate-100 text-slate-700",
@@ -96,6 +98,15 @@ export default function SubmissionLinks() {
     onSuccess: () => {
       toast.success("تم طلب المراجعة");
       utils.pulse.listSubmissionLinks.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const rejectSubmission = trpc.pulse.rejectSubmission.useMutation({
+    onSuccess: () => {
+      toast.success("تم رفض الإدخال واستبعاد بياناته من التقارير");
+      utils.pulse.listSubmissionLinks.invalidate();
+      if (selectedLinkId) utils.pulse.getSubmissionReview.invalidate({ id: selectedLinkId });
+      utils.pulse.dashboard.invalidate();
     },
     onError: (error) => toast.error(error.message),
   });
@@ -265,6 +276,7 @@ export default function SubmissionLinks() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => requestRevision.mutate({ id: review.link.id })}>طلب تعديل</Button>
+                <Button variant="outline" className="border-red-200 text-red-700 hover:bg-red-50" onClick={() => rejectSubmission.mutate({ id: review.link.id })}>رفض الإدخال</Button>
                 <Button className="bg-[#2e7d6b] hover:bg-[#256a5b]" onClick={() => approveSubmission.mutate({ id: review.link.id })}>
                   <CheckCircle2 className="ml-2 h-4 w-4" />
                   اعتماد البيانات

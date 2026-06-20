@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "strategy:manage",
   "kpi:manage",
   "user:manage",
+  "settings:manage",
   "audit:view",
   "export:create",
 ] as const;

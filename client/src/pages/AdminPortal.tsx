@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { roleLabelAr } from "@shared/permissions";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 const statusLabels: Record<string, string> = {
   draft: "مسودة",
@@ -28,7 +29,13 @@ export default function AdminPortal() {
   const dashboard = trpc.admin.dashboard.useQuery();
   const reports = trpc.reports.list.useQuery({ includeInactive: true });
   const users = trpc.admin.users.useQuery(undefined, { retry: false });
-  const audit = trpc.admin.auditLog.useQuery(undefined, { retry: false });
+  const settings = trpc.admin.settings.useQuery();
+  const [auditFilters, setAuditFilters] = useState({ actor: "", action: "", resourceType: "" });
+  const audit = trpc.admin.auditLog.useQuery({
+    actor: auditFilters.actor || undefined,
+    action: auditFilters.action || undefined,
+    resourceType: auditFilters.resourceType || undefined,
+  }, { retry: false });
   const archiveReport = trpc.reports.archive.useMutation({
     onSuccess: async () => {
       toast.success("تمت أرشفة التقرير");
@@ -41,6 +48,18 @@ export default function AdminPortal() {
       await Promise.all([utils.reports.list.invalidate(), utils.admin.dashboard.invalidate(), utils.admin.auditLog.invalidate()]);
     },
   });
+  const lockReport = trpc.reports.lock.useMutation({
+    onSuccess: async () => {
+      toast.success("تم قفل التقرير");
+      await Promise.all([utils.reports.list.invalidate(), utils.admin.dashboard.invalidate(), utils.admin.auditLog.invalidate()]);
+    },
+  });
+  const duplicateReport = trpc.reports.duplicate.useMutation({
+    onSuccess: async () => {
+      toast.success("تم تكرار التقرير");
+      await Promise.all([utils.reports.list.invalidate(), utils.admin.dashboard.invalidate(), utils.admin.auditLog.invalidate()]);
+    },
+  });
   const createUser = trpc.admin.createUser.useMutation({
     onSuccess: async () => {
       toast.success("تم إنشاء المستخدم");
@@ -49,6 +68,24 @@ export default function AdminPortal() {
     },
   });
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "viewer" });
+  const updateSettings = trpc.admin.updateSettings.useMutation({
+    onSuccess: async () => {
+      toast.success("تم حفظ الإعدادات");
+      await Promise.all([utils.admin.settings.invalidate(), utils.admin.auditLog.invalidate()]);
+    },
+    onError: (error) => toast.error(error.message),
+  });
+  const [settingsForm, setSettingsForm] = useState({
+    foundationName: "",
+    displayNameAr: "",
+    primaryColor: "",
+    accentColor: "",
+    externalSubmissionBaseUrl: "",
+    defaultSubmissionExpiryDays: 30,
+    reportDisclaimer: "",
+  });
+
+  const currentSettings = settings.data;
 
   return (
     <div dir="rtl" className="min-h-screen bg-[#f7f2e7] px-4 py-6 md:px-8">
@@ -69,6 +106,23 @@ export default function AdminPortal() {
           <Stat title="اكتمال البيانات" value={`${dashboard.data?.pulseTotals.dataCompletenessScore ?? 0}%`} />
         </section>
 
+        <section className="grid gap-3 md:grid-cols-4">
+          {[
+            { label: "لوحة النبض", href: "/" },
+            { label: "الكيانات التنفيذية", href: "/pulse#entities" },
+            { label: "المسارات والأهداف", href: "/pulse#strategy" },
+            { label: "المؤشرات وربطها بالأهداف", href: "/pulse#metrics" },
+            { label: "إدخال البيانات الشهرية", href: "/pulse#values" },
+            { label: "روابط الإدخال الشهري", href: "/pulse/submission-links" },
+            { label: "شواهد الأثر", href: "/pulse#evidence" },
+            { label: "تقارير الداعمين", href: "/reports#donor" },
+          ].map((item) => (
+            <Link key={item.href} href={item.href} className="rounded-lg bg-white px-4 py-3 text-center text-sm font-extrabold text-[#1b2a5e] shadow-sm transition hover:bg-[#fffdf6]">
+              {item.label}
+            </Link>
+          ))}
+        </section>
+
         <section className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
           <Card className="border-0 shadow-sm">
             <CardHeader>
@@ -87,6 +141,8 @@ export default function AdminPortal() {
                       <>
                         <Button size="sm" variant="outline" onClick={() => archiveReport.mutate({ id: report.id })}>أرشفة التقرير</Button>
                         <Button size="sm" variant="outline" onClick={() => cancelReport.mutate({ id: report.id, reason: "إلغاء إداري من بوابة الإدارة" })}>إلغاء التقرير</Button>
+                        <Button size="sm" variant="outline" onClick={() => lockReport.mutate({ id: report.id })}>قفل التقرير</Button>
+                        <Button size="sm" variant="outline" onClick={() => duplicateReport.mutate({ id: report.id })}>تكرار</Button>
                       </>
                     )}
                   </div>
@@ -140,13 +196,48 @@ export default function AdminPortal() {
 
         <Card className="border-0 shadow-sm">
           <CardHeader>
+            <CardTitle className="text-[#1b2a5e]">الإعدادات والهوية</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <Input placeholder={currentSettings?.foundationName ?? "اسم المؤسسة"} value={settingsForm.foundationName} onChange={(event) => setSettingsForm((value) => ({ ...value, foundationName: event.target.value }))} />
+            <Input placeholder={currentSettings?.displayNameAr ?? "الاسم العربي"} value={settingsForm.displayNameAr} onChange={(event) => setSettingsForm((value) => ({ ...value, displayNameAr: event.target.value }))} />
+            <Input placeholder={currentSettings?.primaryColor ?? "اللون الأساسي"} dir="ltr" value={settingsForm.primaryColor} onChange={(event) => setSettingsForm((value) => ({ ...value, primaryColor: event.target.value }))} />
+            <Input placeholder={currentSettings?.accentColor ?? "لون التمييز"} dir="ltr" value={settingsForm.accentColor} onChange={(event) => setSettingsForm((value) => ({ ...value, accentColor: event.target.value }))} />
+            <Input placeholder={currentSettings?.externalSubmissionBaseUrl ?? "رابط الإدخال الخارجي"} dir="ltr" value={settingsForm.externalSubmissionBaseUrl} onChange={(event) => setSettingsForm((value) => ({ ...value, externalSubmissionBaseUrl: event.target.value }))} />
+            <Input type="number" min={1} max={365} placeholder="مدة صلاحية روابط الإدخال بالأيام" value={settingsForm.defaultSubmissionExpiryDays} onChange={(event) => setSettingsForm((value) => ({ ...value, defaultSubmissionExpiryDays: Number(event.target.value) || 30 }))} />
+            <Input className="md:col-span-2" placeholder={currentSettings?.reportDisclaimer ?? "نص الثقة في التقارير"} value={settingsForm.reportDisclaimer} onChange={(event) => setSettingsForm((value) => ({ ...value, reportDisclaimer: event.target.value }))} />
+            <Button
+              className="bg-[#1b2a5e] hover:bg-[#2c3f7a] md:col-span-2"
+              onClick={() => updateSettings.mutate({
+                foundationName: settingsForm.foundationName || undefined,
+                displayNameAr: settingsForm.displayNameAr || undefined,
+                primaryColor: settingsForm.primaryColor || undefined,
+                accentColor: settingsForm.accentColor || undefined,
+                externalSubmissionBaseUrl: settingsForm.externalSubmissionBaseUrl || undefined,
+                defaultSubmissionExpiryDays: settingsForm.defaultSubmissionExpiryDays,
+                reportDisclaimer: settingsForm.reportDisclaimer || undefined,
+              })}
+            >
+              حفظ الإعدادات
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader>
             <CardTitle className="text-[#1b2a5e]">سجل العمليات</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            <div className="grid gap-2 md:grid-cols-3">
+              <Input placeholder="فلترة بالمستخدم" value={auditFilters.actor} onChange={(event) => setAuditFilters((value) => ({ ...value, actor: event.target.value }))} />
+              <Input placeholder="فلترة بالإجراء" dir="ltr" value={auditFilters.action} onChange={(event) => setAuditFilters((value) => ({ ...value, action: event.target.value }))} />
+              <Input placeholder="نوع المورد" dir="ltr" value={auditFilters.resourceType} onChange={(event) => setAuditFilters((value) => ({ ...value, resourceType: event.target.value }))} />
+            </div>
             {(audit.data ?? []).slice(0, 40).map((item) => (
-              <div key={item.id} className="grid gap-2 rounded-lg border bg-white p-3 md:grid-cols-[160px_160px_1fr]">
+              <div key={item.id} className="grid gap-2 rounded-lg border bg-white p-3 md:grid-cols-[160px_160px_180px_1fr]">
                 <div className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString("ar-EG")}</div>
                 <div className="text-sm font-bold text-[#1b2a5e]">{item.actorName || "النظام"}</div>
+                <div className="text-xs font-bold text-[#9a7a26]">{item.action}</div>
                 <div className="text-sm text-slate-700">{item.summaryAr}</div>
               </div>
             ))}

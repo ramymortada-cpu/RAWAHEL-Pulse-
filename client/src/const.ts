@@ -1,7 +1,7 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
-// RAWAHEL Pulse runs independently. If OAuth env vars are absent, the server
-// provides a local admin session for MVP/demo operation.
+// RAWAHEL Pulse runs independently. If OAuth env vars are absent outside
+// production, the server provides a local admin session for development/review.
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   const appId = import.meta.env.VITE_APP_ID;
