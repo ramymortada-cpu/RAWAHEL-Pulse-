@@ -34,14 +34,17 @@ import {
   Menu as MenuIcon,
   Boxes,
   Gauge,
+  ShieldCheck,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { useEffect, useState } from "react";
+import { roleLabelAr } from "@shared/permissions";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "لوحة النبض", path: "/" },
+  { icon: ShieldCheck, label: "بوابة الإدارة", path: "/admin" },
   { icon: FileBarChart, label: "التقارير", path: "/reports" },
   { icon: Boxes, label: "الكيانات التنفيذية", path: "/pulse#entities" },
   { icon: Gauge, label: "المسارات والأهداف", path: "/pulse#strategy" },
@@ -215,7 +218,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                     {user?.name || "-"}
                   </p>
                   <p className="text-xs text-sidebar-foreground/60 truncate mt-1.5">
-                    {user?.email || "-"}
+                    {roleLabelAr(user?.role)} · {user?.email || "-"}
                   </p>
                 </div>
               </button>

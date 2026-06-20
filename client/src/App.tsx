@@ -18,6 +18,7 @@ import EntityDetail from "./pages/EntityDetail";
 import GoalDetail from "./pages/GoalDetail";
 import SubmissionLinks from "./pages/SubmissionLinks";
 import PublicSubmission, { PublicSubmissionSuccess } from "./pages/PublicSubmission";
+import AdminPortal from "./pages/AdminPortal";
 
 function Router() {
   return (
@@ -70,6 +71,16 @@ function Router() {
       <Route path="/pulse/submission-links">
         <DashboardLayout>
           <SubmissionLinks />
+        </DashboardLayout>
+      </Route>
+      <Route path="/admin">
+        <DashboardLayout>
+          <AdminPortal />
+        </DashboardLayout>
+      </Route>
+      <Route path="/admin/:section">
+        <DashboardLayout>
+          <AdminPortal />
         </DashboardLayout>
       </Route>
       <Route path="/pulse">

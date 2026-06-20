@@ -8,8 +8,10 @@ export const users = mysqlTable("users", {
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
+  passwordHash: varchar("passwordHash", { length: 255 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["admin", "editor", "viewer", "user"]).default("viewer").notNull(),
+  role: mysqlEnum("role", ["super_admin", "admin", "editor", "viewer", "user"]).default("viewer").notNull(),
+  status: mysqlEnum("status", ["active", "invited", "suspended"]).default("active").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -30,7 +32,7 @@ export const reports = mysqlTable("reports", {
   month: int("month").notNull(),
   periodType: mysqlEnum("periodType", ["monthly", "quarterly", "semiannual", "annual"]).default("monthly").notNull(),
   audience: mysqlEnum("audience", ["internal", "donor", "board", "public"]).default("internal").notNull(),
-  status: mysqlEnum("status", ["draft", "generated"]).default("draft").notNull(),
+  status: mysqlEnum("status", ["draft", "active", "locked", "archived", "cancelled", "generated"]).default("draft").notNull(),
   // Summary KPI snapshot stored as JSON for fast dashboard rendering
   // { totalBeneficiaries, programsExecuted, volunteers, contentProduced, goalAchievementRate,
   //   trends: { totalBeneficiaries: number, ... } }  trend = % change vs previous month
@@ -39,6 +41,13 @@ export const reports = mysqlTable("reports", {
   pdfKey: varchar("pdfKey", { length: 512 }),
   pdfUrl: varchar("pdfUrl", { length: 512 }),
   generatedAt: timestamp("generatedAt"),
+  lockedAt: timestamp("lockedAt"),
+  lockedByUserId: int("lockedByUserId"),
+  archivedAt: timestamp("archivedAt"),
+  archivedByUserId: int("archivedByUserId"),
+  cancelledAt: timestamp("cancelledAt"),
+  cancelledByUserId: int("cancelledByUserId"),
+  cancelReason: text("cancelReason"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -249,9 +258,14 @@ export const metricValues = mysqlTable("metric_values", {
   source: varchar("source", { length: 255 }),
   submissionLinkId: int("submissionLinkId"),
   submittedByName: varchar("submittedByName", { length: 255 }),
-  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved"]).default("approved").notNull(),
+  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved", "rejected", "archived"]).default("approved").notNull(),
   reviewedByUserId: int("reviewedByUserId"),
   reviewedAt: timestamp("reviewedAt"),
+  approvedAt: timestamp("approvedAt"),
+  approvedByUserId: int("approvedByUserId"),
+  updatedByUserId: int("updatedByUserId"),
+  lockedAt: timestamp("lockedAt"),
+  changeReason: text("changeReason"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -271,7 +285,7 @@ export const evidenceAssets = mysqlTable("evidence_assets", {
   fileKey: varchar("fileKey", { length: 512 }),
   isDonorFacing: boolean("isDonorFacing").default(true).notNull(),
   submissionLinkId: int("submissionLinkId"),
-  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved"]).default("approved").notNull(),
+  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved", "rejected", "archived"]).default("approved").notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -316,3 +330,21 @@ export const reportExports = mysqlTable("report_exports", {
 
 export type ReportExport = typeof reportExports.$inferSelect;
 export type InsertReportExport = typeof reportExports.$inferInsert;
+
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  actorUserId: int("actorUserId"),
+  actorName: varchar("actorName", { length: 255 }),
+  actorRole: varchar("actorRole", { length: 64 }),
+  action: varchar("action", { length: 96 }).notNull(),
+  resourceType: varchar("resourceType", { length: 96 }).notNull(),
+  resourceId: varchar("resourceId", { length: 96 }),
+  summaryAr: text("summaryAr").notNull(),
+  metadataJson: json("metadataJson"),
+  ipAddress: varchar("ipAddress", { length: 96 }),
+  userAgent: varchar("userAgent", { length: 512 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;

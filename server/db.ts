@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
+  auditLogs,
   entities,
   entityGoalLinks,
   entityTrackLinks,
@@ -18,6 +19,7 @@ import {
   InsertStrategicGoal,
   InsertStrategicTrack,
   InsertUser,
+  InsertAuditLog,
   metricDefinitions,
   metricValues,
   reportExports,
@@ -33,6 +35,7 @@ import {
   type InsertDepartmentData,
   type InsertDepartmentItem,
   type InsertSheetConfig,
+  type User,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import {
@@ -66,7 +69,35 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
+    const timestamp = now();
+    const existing = localUsers.find((item) => item.openId === user.openId);
+    const role = user.role ?? (user.openId === ENV.ownerOpenId ? "super_admin" : "viewer");
+    if (existing) {
+      Object.assign(existing, {
+        name: user.name ?? existing.name,
+        email: user.email ?? existing.email,
+        passwordHash: user.passwordHash ?? existing.passwordHash,
+        loginMethod: user.loginMethod ?? existing.loginMethod,
+        role,
+        status: user.status ?? existing.status ?? "active",
+        lastSignedIn: user.lastSignedIn ?? existing.lastSignedIn,
+        updatedAt: timestamp,
+      });
+      return;
+    }
+    localUsers.push({
+      id: nextPulseId(),
+      openId: user.openId,
+      name: user.name ?? null,
+      email: user.email ?? null,
+      passwordHash: user.passwordHash ?? null,
+      loginMethod: user.loginMethod ?? null,
+      role,
+      status: user.status ?? "active",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      lastSignedIn: user.lastSignedIn ?? timestamp,
+    });
     return;
   }
 
@@ -76,7 +107,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "passwordHash", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -97,8 +128,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
+      values.role = "super_admin";
+      updateSet.role = "super_admin";
+    }
+    if (user.status !== undefined) {
+      values.status = user.status;
+      updateSet.status = user.status;
     }
 
     if (!values.lastSignedIn) {
@@ -121,8 +156,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
+    return localUsers.find((user) => user.openId === openId);
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
@@ -130,29 +164,103 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function listUsers() {
+  const db = await getDb();
+  if (!db) return [...localUsers].sort((a, b) => a.id - b.id);
+  return db.select().from(users).orderBy(users.createdAt);
+}
+
+export async function createInternalUser(data: {
+  name: string;
+  email: string;
+  role: "super_admin" | "admin" | "editor" | "viewer";
+  status?: "active" | "invited" | "suspended";
+}) {
+  const openId = `manual:${data.email.toLowerCase()}`;
+  await upsertUser({
+    openId,
+    name: data.name,
+    email: data.email,
+    loginMethod: "manual",
+    role: data.role,
+    status: data.status ?? "active",
+    lastSignedIn: now(),
+  });
+  const user = await getUserByOpenId(openId);
+  return user?.id;
+}
+
+export async function updateInternalUser(
+  id: number,
+  patch: Partial<Pick<User, "name" | "email" | "role" | "status">>
+) {
+  const db = await getDb();
+  if (!db) {
+    const user = localUsers.find((item) => item.id === id);
+    if (user) Object.assign(user, patch, { updatedAt: now() });
+    return;
+  }
+  await db.update(users).set(patch).where(eq(users.id, id));
+}
+
+export async function createAuditLog(data: InsertAuditLog) {
+  const db = await getDb();
+  if (!db) {
+    const row: AuditLogRow = {
+      id: nextPulseId(),
+      actorUserId: data.actorUserId ?? null,
+      actorName: data.actorName ?? null,
+      actorRole: data.actorRole ?? null,
+      action: data.action,
+      resourceType: data.resourceType,
+      resourceId: data.resourceId ?? null,
+      summaryAr: data.summaryAr,
+      metadataJson: data.metadataJson ?? null,
+      ipAddress: data.ipAddress ?? null,
+      userAgent: data.userAgent ?? null,
+      createdAt: now(),
+    };
+    localAuditLogs.unshift(row);
+    return row.id;
+  }
+  const result = await db.insert(auditLogs).values(data).$returningId();
+  return result[0]?.id as number;
+}
+
+export async function listAuditLogs() {
+  const db = await getDb();
+  if (!db) return [...localAuditLogs].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt));
+}
+
 /* ---------------------- Reports ---------------------- */
 
 type ReportRow = typeof reports.$inferSelect;
 type DepartmentDataRow = typeof departmentData.$inferSelect;
 type DepartmentItemRow = typeof departmentItems.$inferSelect;
+type AuditLogRow = typeof auditLogs.$inferSelect;
 
 const localReports: ReportRow[] = [];
 const localDepartmentData: DepartmentDataRow[] = [];
 const localDepartmentItems: DepartmentItemRow[] = [];
+const localUsers: User[] = [];
+const localAuditLogs: AuditLogRow[] = [];
 let localReportId = 1_000;
 
-export async function listReports(ownerId: number) {
+export async function listReports(ownerId: number, options: { includeInactive?: boolean } = {}) {
   const db = await getDb();
   if (!db) {
     return localReports
       .filter((report) => report.ownerId === ownerId)
+      .filter((report) => options.includeInactive || !["archived", "cancelled"].includes(report.status))
       .sort((a, b) => b.year - a.year || b.month - a.month || b.createdAt.getTime() - a.createdAt.getTime());
   }
-  return db
+  const rows = await db
     .select()
     .from(reports)
     .where(eq(reports.ownerId, ownerId))
     .orderBy(desc(reports.year), desc(reports.month), desc(reports.createdAt));
+  return options.includeInactive ? rows : rows.filter((report) => !["archived", "cancelled"].includes(report.status));
 }
 
 export async function getReport(ownerId: number, id: number) {
@@ -200,6 +308,13 @@ export async function createReport(data: InsertReport) {
       pdfKey: data.pdfKey ?? null,
       pdfUrl: data.pdfUrl ?? null,
       generatedAt: data.generatedAt ?? null,
+      lockedAt: data.lockedAt ?? null,
+      lockedByUserId: data.lockedByUserId ?? null,
+      archivedAt: data.archivedAt ?? null,
+      archivedByUserId: data.archivedByUserId ?? null,
+      cancelledAt: data.cancelledAt ?? null,
+      cancelledByUserId: data.cancelledByUserId ?? null,
+      cancelReason: data.cancelReason ?? null,
       createdAt,
       updatedAt: createdAt,
     };
@@ -225,6 +340,34 @@ export async function updateReport(
     .update(reports)
     .set(patch)
     .where(and(eq(reports.id, id), eq(reports.ownerId, ownerId)));
+}
+
+export async function archiveReport(ownerId: number, id: number, actorUserId: number) {
+  const archivedAt = now();
+  await updateReport(ownerId, id, {
+    status: "archived",
+    archivedAt,
+    archivedByUserId: actorUserId,
+  });
+}
+
+export async function cancelReport(ownerId: number, id: number, actorUserId: number, reason: string) {
+  const cancelledAt = now();
+  await updateReport(ownerId, id, {
+    status: "cancelled",
+    cancelledAt,
+    cancelledByUserId: actorUserId,
+    cancelReason: reason,
+  });
+}
+
+export async function lockReport(ownerId: number, id: number, actorUserId: number) {
+  const lockedAt = now();
+  await updateReport(ownerId, id, {
+    status: "locked",
+    lockedAt,
+    lockedByUserId: actorUserId,
+  });
 }
 
 export async function deleteReport(ownerId: number, id: number) {
@@ -1077,6 +1220,11 @@ export async function upsertPulseMetricValue(data: InsertMetricValue) {
       submissionStatus: data.submissionStatus ?? "approved" as const,
       reviewedByUserId: data.reviewedByUserId ?? null,
       reviewedAt: data.reviewedAt ?? null,
+      approvedAt: data.approvedAt ?? (data.submissionStatus === "approved" || data.submissionStatus == null ? now() : null),
+      approvedByUserId: data.approvedByUserId ?? null,
+      updatedByUserId: data.updatedByUserId ?? null,
+      lockedAt: data.lockedAt ?? null,
+      changeReason: data.changeReason ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -1109,6 +1257,65 @@ export async function getPulseReportValues(reportId: number) {
   const db = await getDb();
   if (!db) return getPulseCache().metricValues.filter((value) => value.reportId === reportId);
   return db.select().from(metricValues).where(eq(metricValues.reportId, reportId));
+}
+
+export async function updatePulseMetricValueWithReason(data: {
+  id: number;
+  actorUserId: number;
+  valueNumber?: number | null;
+  valueText?: string | null;
+  notes?: string | null;
+  changeReason: string;
+}) {
+  if (!data.changeReason.trim()) {
+    throw new Error("change_reason_required");
+  }
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const value = cache.metricValues.find((item) => item.id === data.id);
+    if (!value) return undefined;
+    if (value.submissionStatus === "approved" && !data.changeReason.trim()) {
+      throw new Error("change_reason_required");
+    }
+    const previous = { valueNumber: value.valueNumber, valueText: value.valueText, notes: value.notes };
+    Object.assign(value, {
+      valueNumber: data.valueNumber ?? null,
+      valueText: data.valueText ?? null,
+      notes: data.notes ?? null,
+      updatedByUserId: data.actorUserId,
+      changeReason: data.changeReason,
+      updatedAt: now(),
+    });
+    return { previous, current: { valueNumber: value.valueNumber, valueText: value.valueText, notes: value.notes }, value };
+  }
+  const rows = await db.select().from(metricValues).where(eq(metricValues.id, data.id)).limit(1);
+  const value = rows[0];
+  if (!value) return undefined;
+  const previous = { valueNumber: value.valueNumber, valueText: value.valueText, notes: value.notes };
+  await db.update(metricValues).set({
+    valueNumber: data.valueNumber ?? null,
+    valueText: data.valueText ?? null,
+    notes: data.notes ?? null,
+    updatedByUserId: data.actorUserId,
+    changeReason: data.changeReason,
+  }).where(eq(metricValues.id, data.id));
+  return {
+    previous,
+    current: { valueNumber: data.valueNumber ?? null, valueText: data.valueText ?? null, notes: data.notes ?? null },
+    value,
+  };
+}
+
+export async function archivePulseMetricValue(id: number, actorUserId: number, changeReason: string) {
+  if (!changeReason.trim()) throw new Error("change_reason_required");
+  const db = await getDb();
+  if (!db) {
+    const value = getPulseCache().metricValues.find((item) => item.id === id);
+    if (value) Object.assign(value, { submissionStatus: "archived" as const, updatedByUserId: actorUserId, changeReason, updatedAt: now() });
+    return value;
+  }
+  await db.update(metricValues).set({ submissionStatus: "archived", updatedByUserId: actorUserId, changeReason }).where(eq(metricValues.id, id));
 }
 
 export async function createPulseEvidence(data: InsertEvidenceAsset) {
@@ -1419,14 +1626,14 @@ export async function approvePulseSubmission(id: number, reviewedByUserId: numbe
     if (link) Object.assign(link, { status: "approved" as const, reviewedAt, approvedAt: reviewedAt, updatedAt: reviewedAt });
     cache.metricValues
       .filter((value) => value.submissionLinkId === id)
-      .forEach((value) => Object.assign(value, { submissionStatus: "approved" as const, reviewedByUserId, reviewedAt, updatedAt: reviewedAt }));
+      .forEach((value) => Object.assign(value, { submissionStatus: "approved" as const, reviewedByUserId, reviewedAt, approvedByUserId: reviewedByUserId, approvedAt: reviewedAt, updatedAt: reviewedAt }));
     cache.evidenceAssets
       .filter((item) => item.submissionLinkId === id)
       .forEach((item) => Object.assign(item, { submissionStatus: "approved" as const, updatedAt: reviewedAt }));
     return;
   }
   await db.update(submissionLinks).set({ status: "approved", reviewedAt, approvedAt: reviewedAt }).where(eq(submissionLinks.id, id));
-  await db.update(metricValues).set({ submissionStatus: "approved", reviewedByUserId, reviewedAt }).where(eq(metricValues.submissionLinkId, id));
+  await db.update(metricValues).set({ submissionStatus: "approved", reviewedByUserId, reviewedAt, approvedByUserId: reviewedByUserId, approvedAt: reviewedAt }).where(eq(metricValues.submissionLinkId, id));
   await db.update(evidenceAssets).set({ submissionStatus: "approved" }).where(eq(evidenceAssets.submissionLinkId, id));
 }
 

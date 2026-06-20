@@ -1,12 +1,15 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { permissionProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
+  archiveReport,
+  cancelReport,
   listReports,
   getReport,
   findReportByPeriod,
   createReport,
   updateReport,
   deleteReport,
+  createAuditLog,
   getDepartmentData,
   upsertDepartmentData,
   getSheetConfig,
@@ -46,12 +49,14 @@ const itemMetricsSchema = z.record(
 );
 
 export const reportsRouter = router({
-  list: protectedProcedure.query(({ ctx }) => listReports(ctx.user.id)),
+  list: protectedProcedure
+    .input(z.object({ includeInactive: z.boolean().default(false) }).optional())
+    .query(({ ctx, input }) => listReports(ctx.user!.id, { includeInactive: input?.includeInactive ?? false })),
 
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.id);
+      const report = await getReport(ctx.user!.id, input.id);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       const [departments, items] = await Promise.all([
         getDepartmentData(input.id),
@@ -64,7 +69,7 @@ export const reportsRouter = router({
   listItems: protectedProcedure
     .input(z.object({ reportId: z.number(), departmentKey: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       const items = await getItemsByReport(input.reportId);
       return input.departmentKey
@@ -76,9 +81,9 @@ export const reportsRouter = router({
   prevReportItems: protectedProcedure
     .input(z.object({ reportId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const current = await getReport(ctx.user.id, input.reportId);
+      const current = await getReport(ctx.user!.id, input.reportId);
       if (!current) throw new TRPCError({ code: "NOT_FOUND" });
-      const all = await listReports(ctx.user.id);
+      const all = await listReports(ctx.user!.id);
       const prev = all
         .filter(
           (r) =>
@@ -96,8 +101,8 @@ export const reportsRouter = router({
     .input(z.object({ idA: z.number(), idB: z.number() }))
     .query(async ({ ctx, input }) => {
       const [a, b] = await Promise.all([
-        getReport(ctx.user.id, input.idA),
-        getReport(ctx.user.id, input.idB),
+        getReport(ctx.user!.id, input.idA),
+        getReport(ctx.user!.id, input.idB),
       ]);
       if (!a || !b) throw new TRPCError({ code: "NOT_FOUND" });
       const [depsA, depsB, itemsA, itemsB] = await Promise.all([
@@ -116,9 +121,9 @@ export const reportsRouter = router({
   growthSeries: protectedProcedure
     .input(z.object({ reportId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const current = await getReport(ctx.user.id, input.reportId);
+      const current = await getReport(ctx.user!.id, input.reportId);
       if (!current) throw new TRPCError({ code: "NOT_FOUND" });
-      const all = await listReports(ctx.user.id);
+      const all = await listReports(ctx.user!.id);
       // chronological order, only periods up to the current report
       const ordered = all
         .filter(
@@ -137,7 +142,7 @@ export const reportsRouter = router({
       });
     }),
 
-  create: protectedProcedure
+  create: permissionProcedure("report:create")
     .input(
       z.object({
         year: z.number(),
@@ -148,7 +153,7 @@ export const reportsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await findReportByPeriod(ctx.user.id, input.year, input.month);
+      const existing = await findReportByPeriod(ctx.user!.id, input.year, input.month);
       if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
@@ -157,7 +162,7 @@ export const reportsRouter = router({
       }
       const title = input.title?.trim() || `نبض رواحل · تقرير ${monthName(input.month)} ${input.year}`;
       const id = await createReport({
-        ownerId: ctx.user.id,
+        ownerId: ctx.user!.id,
         title,
         year: input.year,
         month: input.month,
@@ -165,17 +170,72 @@ export const reportsRouter = router({
         audience: input.audience,
         status: "draft",
       });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.created",
+        resourceType: "report",
+        resourceId: String(id),
+        summaryAr: `تم إنشاء التقرير: ${title}`,
+      });
       return { id };
     }),
 
-  delete: protectedProcedure
+  delete: permissionProcedure("report:delete")
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      await deleteReport(ctx.user.id, input.id);
+      await deleteReport(ctx.user!.id, input.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.deleted",
+        resourceType: "report",
+        resourceId: String(input.id),
+        summaryAr: "تم حذف تقرير نهائيًا بواسطة مدير عام.",
+      });
       return { success: true };
     }),
 
-  saveDepartment: protectedProcedure
+  archive: permissionProcedure("report:archive")
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const report = await getReport(ctx.user!.id, input.id);
+      if (!report) throw new TRPCError({ code: "NOT_FOUND" });
+      await archiveReport(ctx.user!.id, input.id, ctx.user!.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.archived",
+        resourceType: "report",
+        resourceId: String(input.id),
+        summaryAr: `تمت أرشفة التقرير: ${report.title}`,
+      });
+      return { success: true };
+    }),
+
+  cancel: permissionProcedure("report:cancel")
+    .input(z.object({ id: z.number(), reason: z.string().min(2) }))
+    .mutation(async ({ ctx, input }) => {
+      const report = await getReport(ctx.user!.id, input.id);
+      if (!report) throw new TRPCError({ code: "NOT_FOUND" });
+      await cancelReport(ctx.user!.id, input.id, ctx.user!.id, input.reason);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.cancelled",
+        resourceType: "report",
+        resourceId: String(input.id),
+        summaryAr: `تم إلغاء التقرير: ${report.title}`,
+        metadataJson: { reason: input.reason },
+      });
+      return { success: true };
+    }),
+
+  saveDepartment: permissionProcedure("report:update")
     .input(
       z.object({
         reportId: z.number(),
@@ -186,7 +246,7 @@ export const reportsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       const normalized: Record<string, number> = {};
       for (const [k, v] of Object.entries(input.metrics)) {
@@ -199,12 +259,12 @@ export const reportsRouter = router({
         achievements: input.achievements,
         notes: input.notes ?? null,
       });
-      await refreshSummary(ctx.user.id, input.reportId);
+      await refreshSummary(ctx.user!.id, input.reportId);
       return { success: true };
     }),
 
   // Save (create/update) a single named item, then re-roll the summary.
-  saveItem: protectedProcedure
+  saveItem: permissionProcedure("report:update")
     .input(
       z.object({
         reportId: z.number(),
@@ -218,7 +278,7 @@ export const reportsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       // Preserve __custom (KPI defs) and __highlight (free text) verbatim;
       // coerce the rest to numbers. Shared, unit-tested normalization helper.
@@ -235,12 +295,12 @@ export const reportsRouter = router({
         notes: input.notes ?? null,
         sortOrder: input.sortOrder ?? 0,
       });
-      await refreshSummary(ctx.user.id, input.reportId);
+      await refreshSummary(ctx.user!.id, input.reportId);
       return { success: true };
     }),
 
   // Persist drag-and-drop reordering within a department.
-  reorderItems: protectedProcedure
+  reorderItems: permissionProcedure("report:update")
     .input(
       z.object({
         reportId: z.number(),
@@ -249,29 +309,29 @@ export const reportsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       await reorderItems(input.reportId, input.departmentKey, input.orderedItemKeys);
       return { success: true };
     }),
 
-  deleteItem: protectedProcedure
+  deleteItem: permissionProcedure("report:update")
     .input(
       z.object({ reportId: z.number(), departmentKey: z.string(), itemKey: z.string() })
     )
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       await deleteItem(input.reportId, input.departmentKey, input.itemKey);
-      await refreshSummary(ctx.user.id, input.reportId);
+      await refreshSummary(ctx.user!.id, input.reportId);
       return { success: true };
     }),
 
   // Seed the catalog baseline items for a report (only items not already present).
-  seedBaseline: protectedProcedure
+  seedBaseline: permissionProcedure("report:update")
     .input(z.object({ reportId: z.number(), overwrite: z.boolean().default(false) }))
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       const existing = await getItemsByReport(input.reportId);
       const existingSet = new Set(existing.map((i) => `${i.departmentKey}:${i.itemKey}`));
@@ -295,48 +355,57 @@ export const reportsRouter = router({
           seeded += 1;
         }
       }
-      await refreshSummary(ctx.user.id, input.reportId);
+      await refreshSummary(ctx.user!.id, input.reportId);
       return { seeded };
     }),
 
-  refreshSummary: protectedProcedure
+  refreshSummary: permissionProcedure("report:update")
     .input(z.object({ reportId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const summary = await refreshSummary(ctx.user.id, input.reportId);
+      const summary = await refreshSummary(ctx.user!.id, input.reportId);
       return summary;
     }),
 
-  uploadPdf: protectedProcedure
+  uploadPdf: permissionProcedure("export:create")
     .input(z.object({ reportId: z.number(), base64: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
       const buffer = Buffer.from(input.base64, "base64");
-      const relKey = `reports/${ctx.user.id}/report-${report.year}-${String(
+      const relKey = `reports/${ctx.user!.id}/report-${report.year}-${String(
         report.month
       ).padStart(2, "0")}.pdf`;
       const { key, url } = await storagePut(relKey, buffer, "application/pdf");
       return { key, url };
     }),
 
-  markGenerated: protectedProcedure
+  markGenerated: permissionProcedure("export:create")
     .input(z.object({ reportId: z.number(), pdfKey: z.string(), pdfUrl: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
-      await updateReport(ctx.user.id, input.reportId, {
-        status: "generated",
+      await updateReport(ctx.user!.id, input.reportId, {
+        status: "locked",
         pdfKey: input.pdfKey,
         pdfUrl: input.pdfUrl,
         generatedAt: new Date(),
+      });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.exported",
+        resourceType: "report",
+        resourceId: String(input.reportId),
+        summaryAr: "تم إنشاء تصدير PDF للتقرير.",
       });
       return { success: true };
     }),
 
   /* --------------- Google Sheets --------------- */
-  getSheetConfig: protectedProcedure.query(({ ctx }) => getSheetConfig(ctx.user.id)),
+  getSheetConfig: protectedProcedure.query(({ ctx }) => getSheetConfig(ctx.user!.id)),
 
-  saveSheetConfig: protectedProcedure
+  saveSheetConfig: permissionProcedure("report:update")
     .input(z.object({ sheetUrl: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       const { sheetId, gid } = parseSheetUrl(input.sheetUrl);
@@ -347,7 +416,7 @@ export const reportsRouter = router({
         });
       }
       await upsertSheetConfig({
-        ownerId: ctx.user.id,
+        ownerId: ctx.user!.id,
         sheetUrl: input.sheetUrl,
         sheetId,
         gid: gid ?? "0",
@@ -356,17 +425,17 @@ export const reportsRouter = router({
       return { success: true };
     }),
 
-  syncFromSheet: protectedProcedure
+  syncFromSheet: permissionProcedure("report:update")
     .input(z.object({ reportId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const cfg = await getSheetConfig(ctx.user.id);
+      const cfg = await getSheetConfig(ctx.user!.id);
       if (!cfg) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "لم يتم ربط Google Sheets بعد",
         });
       }
-      const report = await getReport(ctx.user.id, input.reportId);
+      const report = await getReport(ctx.user!.id, input.reportId);
       if (!report) throw new TRPCError({ code: "NOT_FOUND" });
 
       let rows: string[][];
@@ -380,14 +449,14 @@ export const reportsRouter = router({
       }
       const imported = await importSheetRows(input.reportId, rows);
       await upsertSheetConfig({
-        ownerId: ctx.user.id,
+        ownerId: ctx.user!.id,
         sheetUrl: cfg.sheetUrl,
         sheetId: cfg.sheetId,
         gid: cfg.gid,
         enabled: cfg.enabled,
         lastSyncedAt: new Date(),
       });
-      await refreshSummary(ctx.user.id, input.reportId);
+      await refreshSummary(ctx.user!.id, input.reportId);
       return { imported };
     }),
 

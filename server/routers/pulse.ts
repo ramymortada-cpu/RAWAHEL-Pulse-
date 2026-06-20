@@ -1,9 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { adminProcedure, editorProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
+import { adminProcedure, editorProcedure, permissionProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
   approvePulseSubmission,
+  archivePulseMetricValue,
   archivePulseEntity,
+  createAuditLog,
   createPulseEntity,
   createPulseEvidence,
   createPulseMetricDefinition,
@@ -27,6 +29,7 @@ import {
   savePulseSubmission,
   seedPulseMasterData,
   updatePulseEntity,
+  updatePulseMetricValueWithReason,
   updatePulseStrategicGoal,
   updatePulseStrategicTrack,
   upsertPulseMetricValue,
@@ -102,7 +105,17 @@ export const pulseRouter = router({
         managerEmail: input.managerEmail || null,
         managerPhone: input.managerPhone || null,
         expiresAt: input.expiresAt ?? null,
-        createdByUserId: ctx.user.id,
+        createdByUserId: ctx.user!.id,
+      });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission_link.generated",
+        resourceType: "submission_link",
+        resourceId: String(result.link.id),
+        summaryAr: `تم إنشاء رابط إدخال شهري للمدير: ${input.managerName}`,
+        metadataJson: { reportId: input.reportId, entityId: input.entityId },
       });
       return { link: publicSubmissionLink(result.link), rawToken: result.rawToken };
     }),
@@ -114,16 +127,34 @@ export const pulseRouter = router({
 
   revokeSubmissionLink: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await revokePulseSubmissionLink(input.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission_link.revoked",
+        resourceType: "submission_link",
+        resourceId: String(input.id),
+        summaryAr: "تم إلغاء رابط إدخال شهري.",
+      });
       return { success: true };
     }),
 
   regenerateSubmissionLink: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const result = await regeneratePulseSubmissionLink(input.id);
       if (!result) throw new TRPCError({ code: "NOT_FOUND" });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission_link.regenerated",
+        resourceType: "submission_link",
+        resourceId: String(input.id),
+        summaryAr: "تمت إعادة إصدار رابط إدخال شهري وإبطال الرابط السابق.",
+      });
       return { link: publicSubmissionLink(result.link), rawToken: result.rawToken };
     }),
 
@@ -138,14 +169,32 @@ export const pulseRouter = router({
   approveSubmission: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      await approvePulseSubmission(input.id, ctx.user.id);
+      await approvePulseSubmission(input.id, ctx.user!.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission.approved",
+        resourceType: "submission_link",
+        resourceId: String(input.id),
+        summaryAr: "تم اعتماد بيانات إدخال خارجي.",
+      });
       return { success: true };
     }),
 
   requestSubmissionRevision: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await requestPulseSubmissionRevision(input.id);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "submission.needs_revision",
+        resourceType: "submission_link",
+        resourceId: String(input.id),
+        summaryAr: "تم طلب تعديل على إدخال خارجي.",
+      });
       return { success: true };
     }),
 
@@ -407,7 +456,7 @@ export const pulseRouter = router({
         ),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       if (input.values.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "لا توجد مؤشرات للحفظ" });
       }
@@ -420,9 +469,64 @@ export const pulseRouter = router({
           valueText: value.valueText ?? null,
           notes: value.notes ?? null,
           source: value.source ?? null,
+          updatedByUserId: ctx.user!.id,
         });
       }
       return { success: true, saved: input.values.length };
+    }),
+
+  updateMetricValue: permissionProcedure("metric:update_approved")
+    .input(
+      z.object({
+        id: z.number(),
+        valueNumber: z.number().nullable().optional(),
+        valueText: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+        changeReason: z.string().min(2),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await updatePulseMetricValueWithReason({
+        id: input.id,
+        actorUserId: ctx.user!.id,
+        valueNumber: input.valueNumber ?? null,
+        valueText: input.valueText ?? null,
+        notes: input.notes ?? null,
+        changeReason: input.changeReason,
+      });
+      if (!result) throw new TRPCError({ code: "NOT_FOUND" });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "metric_value.updated_approved",
+        resourceType: "metric_value",
+        resourceId: String(input.id),
+        summaryAr: "تم تعديل قيمة مؤشر معتمدة مع تسجيل سبب التعديل.",
+        metadataJson: {
+          reason: input.changeReason,
+          previous: result.previous,
+          current: result.current,
+        },
+      });
+      return { success: true };
+    }),
+
+  archiveMetricValue: permissionProcedure("metric:update_approved")
+    .input(z.object({ id: z.number(), changeReason: z.string().min(2) }))
+    .mutation(async ({ ctx, input }) => {
+      await archivePulseMetricValue(input.id, ctx.user!.id, input.changeReason);
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "metric_value.archived",
+        resourceType: "metric_value",
+        resourceId: String(input.id),
+        summaryAr: "تمت أرشفة قيمة مؤشر ولن تدخل في التقارير الرسمية.",
+        metadataJson: { reason: input.changeReason },
+      });
+      return { success: true };
     }),
 
   reportValues: protectedProcedure
@@ -458,7 +562,7 @@ export const pulseRouter = router({
       return { id };
     }),
 
-  recordExport: editorProcedure
+  recordExport: permissionProcedure("export:create")
     .input(
       z.object({
         reportId: z.number(),
@@ -469,7 +573,7 @@ export const pulseRouter = router({
         url: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const id = await createPulseReportExport({
         reportId: input.reportId,
         type: input.type,
@@ -477,6 +581,16 @@ export const pulseRouter = router({
         fileName: input.fileName,
         fileKey: input.fileKey ?? null,
         url: input.url ?? null,
+      });
+      await createAuditLog({
+        actorUserId: ctx.user!.id,
+        actorName: ctx.user!.name,
+        actorRole: ctx.user!.role,
+        action: "report.exported",
+        resourceType: "report",
+        resourceId: String(input.reportId),
+        summaryAr: `تم تصدير التقرير بصيغة ${input.type.toUpperCase()}.`,
+        metadataJson: { templateKey: input.templateKey, fileName: input.fileName },
       });
       return { id };
     }),

@@ -1,4 +1,5 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
+import { can, type Permission } from "@shared/permissions";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
@@ -27,13 +28,30 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
-const EDITOR_ROLES = new Set(["admin", "editor"]);
+export function permissionProcedure(permission: Permission) {
+  return t.procedure.use(requireUser).use(
+    t.middleware(async opts => {
+      const { ctx, next } = opts;
 
-export const editorProcedure = t.procedure.use(
+      if (!can(ctx.user, permission)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+      }
+
+      return next({
+        ctx: {
+          ...ctx,
+          user: ctx.user,
+        },
+      });
+    }),
+  );
+}
+
+export const editorProcedure = protectedProcedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || !EDITOR_ROLES.has(ctx.user.role)) {
+    if (!can(ctx.user, "metric:update")) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
@@ -46,11 +64,11 @@ export const editorProcedure = t.procedure.use(
   }),
 );
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = protectedProcedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
+    if (!can(ctx.user, "submission:approve")) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
