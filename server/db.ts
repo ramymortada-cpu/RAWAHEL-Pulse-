@@ -5,9 +5,11 @@ import {
   entityGoalLinks,
   entityTrackLinks,
   evidenceAssets,
+  goalMetricLinks,
   InsertEntity,
   InsertEntityGoalLink,
   InsertEvidenceAsset,
+  InsertGoalMetricLink,
   InsertMetricDefinition,
   InsertMetricValue,
   InsertReportExport,
@@ -33,6 +35,7 @@ import { ENV } from "./_core/env";
 import {
   ENTITIES,
   METRIC_DEFINITIONS,
+  GOAL_METRIC_LINKS,
   STRATEGIC_GOALS,
   STRATEGIC_TRACKS,
   calculateGoalProgress,
@@ -374,6 +377,7 @@ type PulseCache = {
   entityTrackLinks: Array<typeof entityTrackLinks.$inferSelect>;
   entityGoalLinks: Array<typeof entityGoalLinks.$inferSelect>;
   metricDefinitions: Array<typeof metricDefinitions.$inferSelect>;
+  goalMetricLinks: Array<typeof goalMetricLinks.$inferSelect>;
   metricValues: Array<typeof metricValues.$inferSelect>;
   evidenceAssets: Array<typeof evidenceAssets.$inferSelect>;
   reportExports: Array<typeof reportExports.$inferSelect>;
@@ -474,6 +478,23 @@ function getPulseCache(): PulseCache {
     createdAt,
     updatedAt: createdAt,
   }));
+  const goalMetricLinksSeed = GOAL_METRIC_LINKS.flatMap((link) => {
+    const goalId = goals.find((goal) => goal.key === link.goalKey)?.id;
+    const metricDefinitionId = metricDefinitionsSeed.find((metric) => metric.key === link.metricKey)?.id;
+    const entityId = link.entityKey ? entitiesSeed.find((entity) => entity.key === link.entityKey)?.id ?? null : null;
+    return goalId && metricDefinitionId
+      ? [{
+          id: nextPulseId(),
+          goalId,
+          metricDefinitionId,
+          entityId,
+          weight: link.weight ?? null,
+          contributionType: link.contributionType ?? "sum" as const,
+          createdAt,
+          updatedAt: createdAt,
+        }]
+      : [];
+  });
   pulseCache = {
     tracks,
     goals,
@@ -481,6 +502,7 @@ function getPulseCache(): PulseCache {
     entityTrackLinks: entityTrackLinksSeed,
     entityGoalLinks: entityGoalLinksSeed,
     metricDefinitions: metricDefinitionsSeed,
+    goalMetricLinks: goalMetricLinksSeed,
     metricValues: [],
     evidenceAssets: [],
     reportExports: [],
@@ -610,13 +632,29 @@ export async function seedPulseMasterData(): Promise<PulseCache> {
     });
   }
 
+  const dbMetricDefinitions = await db.select().from(metricDefinitions);
+  const metricByKey = new Map(dbMetricDefinitions.map((metric) => [metric.key, metric]));
+  for (const link of GOAL_METRIC_LINKS) {
+    const goal = goalByKey.get(link.goalKey);
+    const metric = metricByKey.get(link.metricKey);
+    const entity = link.entityKey ? entityByKey.get(link.entityKey) : null;
+    if (!goal || !metric) continue;
+    await db.insert(goalMetricLinks).values({
+      goalId: goal.id,
+      metricDefinitionId: metric.id,
+      entityId: entity?.id ?? null,
+      weight: link.weight ?? null,
+      contributionType: link.contributionType ?? "sum",
+    });
+  }
+
   return getPulseMasterData();
 }
 
 export async function getPulseMasterData(): Promise<PulseCache> {
   const db = await getDb();
   if (!db) return getPulseCache();
-  const [tracks, goals, entitiesRows, trackLinks, goalLinks, metricDefs] =
+  const [tracks, goals, entitiesRows, trackLinks, goalLinks, metricDefs, goalMetricLinkRows] =
     await Promise.all([
       db.select().from(strategicTracks).orderBy(strategicTracks.sortOrder),
       db.select().from(strategicGoals).orderBy(strategicGoals.sortOrder),
@@ -624,6 +662,7 @@ export async function getPulseMasterData(): Promise<PulseCache> {
       db.select().from(entityTrackLinks),
       db.select().from(entityGoalLinks),
       db.select().from(metricDefinitions).orderBy(metricDefinitions.sortOrder),
+      db.select().from(goalMetricLinks),
     ]);
   if (tracks.length === 0 || goals.length === 0 || entitiesRows.length === 0) {
     return seedPulseMasterData();
@@ -635,6 +674,7 @@ export async function getPulseMasterData(): Promise<PulseCache> {
     entityTrackLinks: trackLinks,
     entityGoalLinks: goalLinks,
     metricDefinitions: metricDefs,
+    goalMetricLinks: goalMetricLinkRows,
     metricValues: [] as Array<typeof metricValues.$inferSelect>,
     evidenceAssets: [] as Array<typeof evidenceAssets.$inferSelect>,
     reportExports: [] as Array<typeof reportExports.$inferSelect>,
@@ -822,6 +862,37 @@ export async function createPulseMetricDefinition(data: InsertMetricDefinition) 
   return result[0]?.id as number;
 }
 
+export async function linkPulseGoalToMetrics(goalId: number, links: Array<Omit<InsertGoalMetricLink, "goalId">>) {
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    cache.goalMetricLinks = cache.goalMetricLinks.filter((link) => link.goalId !== goalId);
+    for (const link of links) {
+      cache.goalMetricLinks.push({
+        id: nextPulseId(),
+        goalId,
+        metricDefinitionId: link.metricDefinitionId,
+        entityId: link.entityId ?? null,
+        weight: link.weight ?? null,
+        contributionType: link.contributionType ?? "sum",
+        createdAt: now(),
+        updatedAt: now(),
+      });
+    }
+    return;
+  }
+  await db.delete(goalMetricLinks).where(eq(goalMetricLinks.goalId, goalId));
+  for (const link of links) {
+    await db.insert(goalMetricLinks).values({
+      goalId,
+      metricDefinitionId: link.metricDefinitionId,
+      entityId: link.entityId ?? null,
+      weight: link.weight ?? null,
+      contributionType: link.contributionType ?? "sum",
+    });
+  }
+}
+
 export async function getMetricsForEntity(entityId: number) {
   const master = await getPulseMasterData();
   const entity = master.entities.find((item) => item.id === entityId);
@@ -943,16 +1014,30 @@ export async function getPulseDashboard(reportId?: number) {
     const def = master.metricDefinitions.find((metricDef: typeof master.metricDefinitions[number]) => metricDef.id === value.metricDefinitionId);
     return {
       entityId: value.entityId,
+      metricDefinitionId: value.metricDefinitionId,
       metricKey: def?.key ?? String(value.metricDefinitionId),
       valueNumber: value.valueNumber,
     };
   });
   const totals = aggregatePulseMetrics(valuesWithKeys);
+  const donorMetricIds = new Set(
+    master.metricDefinitions
+      .filter((metric) => metric.isDonorFacing)
+      .map((metric) => metric.id)
+  );
+  const donorFacingTotals = aggregatePulseMetrics(
+    valuesWithKeys.filter((value) => donorMetricIds.has(value.metricDefinitionId ?? 0))
+  );
   const progress = calculateGoalProgress(
     master.goals,
-    master.entityGoalLinks,
+    master.goalMetricLinks,
     valuesWithKeys
-  );
+  ).map((goal) => ({
+    ...goal,
+    linkedMetricNames: goal.linkedMetricDefinitionIds
+      .map((metricDefinitionId) => master.metricDefinitions.find((metric) => metric.id === metricDefinitionId)?.nameAr)
+      .filter((name): name is string => Boolean(name)),
+  }));
   const evidence = reportId ? await getPulseEvidence(reportId) : await getPulseEvidence();
   const entitiesWithValues = new Set(reportValues.map((value) => value.entityId));
   const missingSubmissions = reportId
@@ -966,6 +1051,11 @@ export async function getPulseDashboard(reportId?: number) {
       ...totals,
       totalEvidenceAssets: evidence.length,
       donorFacingEvidenceCount: evidence.filter((item) => item.isDonorFacing).length,
+      donorFacing: {
+        ...donorFacingTotals,
+        totalEvidenceAssets: evidence.filter((item) => item.isDonorFacing).length,
+        donorFacingEvidenceCount: evidence.filter((item) => item.isDonorFacing).length,
+      },
       goalAchievementRate:
         progress.length > 0
           ? Math.round(progress.reduce((sum, goal) => sum + goal.progress, 0) / progress.length)

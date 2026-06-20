@@ -8,6 +8,7 @@ import {
   createPulseStrategicTrack,
   getPulseDashboard,
   getPulseMasterData,
+  linkPulseGoalToMetrics,
   linkPulseEntityToGoals,
   linkPulseEntityToTracks,
   seedPulseMasterData,
@@ -67,6 +68,14 @@ describe("RAWAHEL Pulse operations", () => {
       sortOrder: 999,
       isActive: true,
     });
+    await linkPulseGoalToMetrics(goalId, [
+      {
+        metricDefinitionId,
+        entityId: null,
+        weight: null,
+        contributionType: "sum",
+      },
+    ]);
     const reportId = 987654;
     await upsertPulseMetricValue({
       reportId,
@@ -94,6 +103,7 @@ describe("RAWAHEL Pulse operations", () => {
     expect(dashboard.goalProgress.find((goal) => goal.goalId === goalId)).toMatchObject({
       actual: 45,
       progress: 45,
+      linkedMetricDefinitionIds: [metricDefinitionId],
     });
     expect(dashboard.donorReadyHighlights.map((item) => item.titleAr)).toContain("قصة أثر اختبارية");
     expect(dashboard.missingSubmissions.some((entity) => entity.id === entityId)).toBe(false);

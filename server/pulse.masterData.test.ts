@@ -50,13 +50,13 @@ describe("RAWAHEL Pulse master data", () => {
     expect(totals.note).toMatch(/تكرار المستفيدين/);
   });
 
-  it("calculates goal progress from linked entity contributions", () => {
+  it("calculates goal progress only from explicitly linked KPI definitions", () => {
     const progress = calculateGoalProgress(
       [{ id: 1, key: "goal", nameAr: "هدف", targetValue: 100, targetUnit: "مستفيد" }],
-      [{ entityId: 10, goalId: 1, weight: 1 }],
+      [{ goalId: 1, metricDefinitionId: 7, entityId: null, weight: 1, contributionType: "sum" }],
       [
-        { entityId: 10, metricKey: "new_beneficiaries", valueNumber: 45 },
-        { entityId: 99, metricKey: "new_beneficiaries", valueNumber: 500 },
+        { entityId: 10, metricDefinitionId: 7, metricKey: "new_beneficiaries", valueNumber: 45 },
+        { entityId: 10, metricDefinitionId: 99, metricKey: "answered_messages", valueNumber: 500 },
       ]
     );
 
@@ -65,6 +65,7 @@ describe("RAWAHEL Pulse master data", () => {
       target: 100,
       progress: 45,
       status: "red",
+      linkedMetricDefinitionIds: [7],
     });
   });
 });

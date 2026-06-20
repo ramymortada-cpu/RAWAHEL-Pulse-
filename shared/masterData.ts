@@ -61,6 +61,14 @@ export type MetricDefinitionSeed = {
   sortOrder: number;
 };
 
+export type GoalMetricLinkSeed = {
+  goalKey: string;
+  metricKey: string;
+  entityKey?: string;
+  weight?: number;
+  contributionType?: "sum" | "avg" | "latest";
+};
+
 export const STRATEGIC_TRACKS: StrategicTrackSeed[] = [
   { key: "incubators", nameAr: "بناء الحاضنات التربوية", descriptionAr: "تأسيس بيئات تربوية مستدامة للشباب والأسر.", color: "#1b2a5e", icon: "School", sortOrder: 1 },
   { key: "knowledge", nameAr: "إنتاج المعرفة التأسيسية والمنهجية", descriptionAr: "تأليف وتطوير المناهج والمواد المؤسسة.", color: "#d4a843", icon: "BookOpen", sortOrder: 2 },
@@ -179,6 +187,27 @@ export const TYPE_METRIC_PRESETS: MetricDefinitionSeed[] = [
 
 export const METRIC_DEFINITIONS = [...CORE_METRICS, ...TYPE_METRIC_PRESETS];
 
+export const GOAL_METRIC_LINKS: GoalMetricLinkSeed[] = [
+  { goalKey: "attract_1000_youth", metricKey: "new_beneficiaries" },
+  { goalKey: "attract_1000_youth", metricKey: "registered_new" },
+  { goalKey: "graduate_100_educators", metricKey: "graduates" },
+  { goalKey: "graduate_100_educators", metricKey: "certified_students" },
+  { goalKey: "publish_5_books", metricKey: "books_completed" },
+  { goalKey: "reach_2m_followers", metricKey: "reach" },
+  { goalKey: "run_20_events", metricKey: "activities_count" },
+  { goalKey: "run_20_events", metricKey: "monthly_sessions" },
+  { goalKey: "build_10_partnerships", metricKey: "new_partnerships" },
+  { goalKey: "launch_6_campaigns", metricKey: "activities_count" },
+  { goalKey: "hire_7_staff", metricKey: "active_volunteers" },
+  { goalKey: "deliver_4_training_programs", metricKey: "activities_count" },
+  { goalKey: "adopt_10_kpis", metricKey: "evidence_stories" },
+  { goalKey: "issue_12_financial_reports", metricKey: "monthly_financial_report" },
+  { goalKey: "build_data_platforms", metricKey: "activities_count" },
+  { goalKey: "waqf_transition", metricKey: "budget_spent" },
+  { goalKey: "document_all_operations", metricKey: "evidence_stories" },
+  { goalKey: "identify_5_operational_risks", metricKey: "evidence_stories" },
+];
+
 export function metricsForEntityType(type: EntityType) {
   return METRIC_DEFINITIONS.filter((m) => !m.appliesToType || m.appliesToType === type);
 }
@@ -186,6 +215,7 @@ export function metricsForEntityType(type: EntityType) {
 export type MetricValueLike = {
   entityId: number;
   metricKey: string;
+  metricDefinitionId?: number;
   valueNumber?: number | null;
 };
 
@@ -201,6 +231,14 @@ export type EntityGoalLinkLike = {
   entityId: number;
   goalId: number;
   weight?: number | null;
+};
+
+export type GoalMetricLinkLike = {
+  goalId: number;
+  metricDefinitionId: number;
+  entityId?: number | null;
+  weight?: number | null;
+  contributionType?: "sum" | "avg" | "latest";
 };
 
 export function aggregatePulseMetrics(values: MetricValueLike[]) {
@@ -224,16 +262,26 @@ export function aggregatePulseMetrics(values: MetricValueLike[]) {
 
 export function calculateGoalProgress(
   goals: GoalLike[],
-  links: EntityGoalLinkLike[],
+  links: GoalMetricLinkLike[],
   values: MetricValueLike[]
 ) {
   return goals.map((goal) => {
-    const linkedEntityIds = new Set(
-      links.filter((link) => link.goalId === goal.id).map((link) => link.entityId)
-    );
-    const actual = values
-      .filter((value) => linkedEntityIds.has(value.entityId))
-      .reduce((total, value) => total + (Number(value.valueNumber) || 0), 0);
+    const goalLinks = links.filter((link) => link.goalId === goal.id);
+    const actual = goalLinks.reduce((total, link) => {
+      const matchingValues = values
+        .filter((value) => value.metricDefinitionId === link.metricDefinitionId)
+        .filter((value) => !link.entityId || value.entityId === link.entityId)
+        .map((value) => Number(value.valueNumber) || 0);
+      if (matchingValues.length === 0) return total;
+      const contributionType = link.contributionType ?? "sum";
+      const rawContribution =
+        contributionType === "avg"
+          ? matchingValues.reduce((sum, value) => sum + value, 0) / matchingValues.length
+          : contributionType === "latest"
+            ? matchingValues[matchingValues.length - 1]
+            : matchingValues.reduce((sum, value) => sum + value, 0);
+      return total + rawContribution * (Number(link.weight ?? 1) || 1);
+    }, 0);
     const target = Number(goal.targetValue) || 0;
     const progress = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : 0;
     return {
@@ -245,6 +293,7 @@ export function calculateGoalProgress(
       unit: goal.targetUnit ?? "",
       progress,
       status: progress >= 90 ? "green" : progress >= 60 ? "amber" : "red",
+      linkedMetricDefinitionIds: goalLinks.map((link) => link.metricDefinitionId),
     };
   });
 }

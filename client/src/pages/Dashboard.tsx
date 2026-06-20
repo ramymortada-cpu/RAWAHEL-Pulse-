@@ -156,6 +156,9 @@ export default function Dashboard() {
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                       <div className="h-full rounded-full bg-[#2e7d6b]" style={{ width: `${goal.progress}%` }} />
                     </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      يُحسب من: {goal.linkedMetricNames.length > 0 ? goal.linkedMetricNames.join("، ") : "لم يتم ربط مؤشرات بعد"}
+                    </div>
                   </button>
                 ))}
               </div>

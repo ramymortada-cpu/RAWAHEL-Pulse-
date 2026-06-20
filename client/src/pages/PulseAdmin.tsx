@@ -59,6 +59,14 @@ function slugifyArabic(value: string) {
     .slice(0, 64);
 }
 
+const adminTabs = [
+  { id: "pulse-entities", label: "الكيانات" },
+  { id: "pulse-strategy", label: "المسارات والأهداف" },
+  { id: "pulse-metrics", label: "المؤشرات" },
+  { id: "pulse-values", label: "إدخال القيم" },
+  { id: "pulse-evidence", label: "شواهد الأثر" },
+];
+
 export default function PulseAdmin() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -103,6 +111,8 @@ export default function PulseAdmin() {
     targetUnit: "عدد",
     periodType: "yearly" as "yearly" | "two_years" | "monthly" | "custom",
   });
+  const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null);
+  const [goalMetricIds, setGoalMetricIds] = useState<number[]>([]);
 
   const activeEntities = useMemo(
     () => ((master?.entities ?? []) as PulseEntity[]).filter((entity: PulseEntity) => entity.status !== "archived"),
@@ -208,6 +218,15 @@ export default function PulseAdmin() {
     onError: (error) => toast.error(error.message),
   });
 
+  const linkGoalMetrics = trpc.pulse.linkGoalMetrics.useMutation({
+    onSuccess: ({ linked }) => {
+      toast.success(`تم ربط ${linked} مؤشر بالهدف`);
+      utils.pulse.masterData.invalidate();
+      utils.pulse.dashboard.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
   const loadSelectedEntityForEdit = () => {
     if (!selectedEntity || !master) return;
     setEntityForm({
@@ -223,6 +242,15 @@ export default function PulseAdmin() {
 
   const toggleId = (ids: number[], id: number) =>
     ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
+
+  const loadGoalMetrics = (goalId: number) => {
+    setSelectedGoalId(goalId);
+    setGoalMetricIds(
+      (master?.goalMetricLinks ?? [])
+        .filter((link) => link.goalId === goalId)
+        .map((link) => link.metricDefinitionId)
+    );
+  };
 
   const existingValue = (metricDefinitionId: number) =>
     reportValues?.find(
@@ -267,7 +295,20 @@ export default function PulseAdmin() {
           <PulseStat label="نسبة تحقيق الأهداف" value={dashboard?.totals.goalAchievementRate ?? 0} suffix="%" icon={<Target />} />
         </section>
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-2">
+        <nav className="mt-6 flex gap-2 overflow-x-auto rounded-2xl border border-[#1b2a5e]/10 bg-white p-2 shadow-sm">
+          {adminTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-[#1b2a5e] transition hover:bg-[#f7f2e7]"
+              onClick={() => document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <section id="pulse-strategy" className="mt-8 scroll-mt-6 grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-extrabold text-[#1b2a5e]">المسارات الاستراتيجية</h2>
             <p className="mt-1 text-sm text-slate-500">أضف مسارًا جديدًا أو راجع المسارات الحالية.</p>
@@ -323,7 +364,7 @@ export default function PulseAdmin() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+          <div id="pulse-entities" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-extrabold text-[#1b2a5e]">الأهداف الاستراتيجية</h2>
             <p className="mt-1 text-sm text-slate-500">أضف هدفًا قابلًا للقياس واربطه بمسار.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -396,6 +437,56 @@ export default function PulseAdmin() {
               <Plus className="ml-2 h-4 w-4" />
               إضافة هدف
             </Button>
+
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+              <h3 className="font-extrabold text-[#1b2a5e]">ربط الهدف بالمؤشرات</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                تقدم الهدف سيُحسب من هذه المؤشرات فقط، ولن يخلط رسائل أو ساعات أو نسب غير مرتبطة.
+              </p>
+              <select
+                className="mt-3 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedGoalId ?? ""}
+                onChange={(event) => loadGoalMetrics(Number(event.target.value))}
+              >
+                <option value="">اختر هدفًا</option>
+                {((master?.goals ?? []) as PulseGoal[]).map((goal) => (
+                  <option key={goal.id} value={goal.id}>{goal.nameAr}</option>
+                ))}
+              </select>
+              <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-xl bg-white p-3">
+                {(master?.metricDefinitions ?? []).filter((metric) => metric.isActive).map((metric) => (
+                  <button
+                    key={metric.id}
+                    type="button"
+                    onClick={() => setGoalMetricIds((ids) => toggleId(ids, metric.id))}
+                    className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                      goalMetricIds.includes(metric.id)
+                        ? "border-[#d4a843] bg-[#fff8e4] text-[#1b2a5e]"
+                        : "border-slate-200 bg-white text-slate-600"
+                    }`}
+                  >
+                    {metric.nameAr}
+                  </button>
+                ))}
+              </div>
+              <Button
+                className="mt-3"
+                variant="outline"
+                disabled={!selectedGoalId || linkGoalMetrics.isPending}
+                onClick={() =>
+                  selectedGoalId &&
+                  linkGoalMetrics.mutate({
+                    goalId: selectedGoalId,
+                    links: goalMetricIds.map((metricDefinitionId) => ({
+                      metricDefinitionId,
+                      contributionType: "sum" as const,
+                    })),
+                  })
+                }
+              >
+                حفظ مؤشرات الهدف
+              </Button>
+            </div>
           </div>
         </section>
 
@@ -553,7 +644,7 @@ export default function PulseAdmin() {
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+            <div id="pulse-metrics" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-extrabold text-[#1b2a5e]">
                 {PULSE_TERMS.metrics}
               </h2>
@@ -608,7 +699,7 @@ export default function PulseAdmin() {
               </Button>
             </div>
 
-            <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+            <div id="pulse-values" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-extrabold text-[#1b2a5e]">
                 الإدخال الشهري
               </h2>
@@ -680,7 +771,7 @@ export default function PulseAdmin() {
               </Button>
             </div>
 
-            <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+            <div id="pulse-evidence" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-extrabold text-[#1b2a5e]">
                 {PULSE_TERMS.evidence}
               </h2>

@@ -46,12 +46,27 @@ export type InfographicData = {
   pulse?: {
     totals: {
       totalBeneficiaries?: number;
+      newBeneficiaries?: number;
+      totalActivities?: number;
+      totalVolunteerHours?: number;
       programsExecuted?: number;
       volunteers?: number;
       contentProduced?: number;
       goalAchievementRate?: number;
       totalEvidenceAssets?: number;
       donorFacingEvidenceCount?: number;
+      donorFacing?: {
+        totalBeneficiaries?: number;
+        newBeneficiaries?: number;
+        totalActivities?: number;
+        totalVolunteerHours?: number;
+        programsExecuted?: number;
+        volunteers?: number;
+        contentProduced?: number;
+        goalAchievementRate?: number;
+        totalEvidenceAssets?: number;
+        donorFacingEvidenceCount?: number;
+      };
     };
     activeEntities: { id: number; nameAr: string; type: string; color?: string | null }[];
     goalProgress: { goalId: number; nameAr: string; actual: number; target: number; progress: number; status: string }[];
@@ -88,11 +103,14 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
         : templateKey === "annual"
           ? "التقرير السنوي للأثر"
           : "التقرير الشهري للإنجازات";
-    const pulseTotals = data.pulse?.totals;
+    const pulseTotals =
+      templateKey === "donor"
+        ? data.pulse?.totals.donorFacing ?? data.pulse?.totals
+        : data.pulse?.totals;
     const displaySummary = {
       totalBeneficiaries: pulseTotals?.totalBeneficiaries ?? summary.totalBeneficiaries,
-      programsExecuted: pulseTotals?.programsExecuted ?? summary.programsExecuted,
-      volunteers: pulseTotals?.volunteers ?? summary.volunteers,
+      programsExecuted: pulseTotals?.programsExecuted ?? pulseTotals?.totalActivities ?? summary.programsExecuted,
+      volunteers: pulseTotals?.volunteers ?? pulseTotals?.totalVolunteerHours ?? summary.volunteers,
       contentProduced: pulseTotals?.contentProduced ?? summary.contentProduced,
       goalAchievementRate: pulseTotals?.goalAchievementRate ?? summary.goalAchievementRate,
     };

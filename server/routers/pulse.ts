@@ -13,6 +13,7 @@ import {
   getPulseDashboard,
   getPulseMasterData,
   getPulseReportValues,
+  linkPulseGoalToMetrics,
   linkPulseEntityToGoals,
   linkPulseEntityToTracks,
   seedPulseMasterData,
@@ -129,6 +130,25 @@ export const pulseRouter = router({
       const { id, ...patch } = input;
       await updatePulseStrategicGoal(id, patch);
       return { success: true };
+    }),
+
+  linkGoalMetrics: adminProcedure
+    .input(
+      z.object({
+        goalId: z.number(),
+        links: z.array(
+          z.object({
+            metricDefinitionId: z.number(),
+            entityId: z.number().nullable().optional(),
+            weight: z.number().nullable().optional(),
+            contributionType: z.enum(["sum", "avg", "latest"]).default("sum"),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await linkPulseGoalToMetrics(input.goalId, input.links);
+      return { success: true, linked: input.links.length };
     }),
 
   createEntity: adminProcedure

@@ -224,6 +224,20 @@ export const metricDefinitions = mysqlTable("metric_definitions", {
 export type MetricDefinition = typeof metricDefinitions.$inferSelect;
 export type InsertMetricDefinition = typeof metricDefinitions.$inferInsert;
 
+export const goalMetricLinks = mysqlTable("goal_metric_links", {
+  id: int("id").autoincrement().primaryKey(),
+  goalId: int("goalId").notNull(),
+  metricDefinitionId: int("metricDefinitionId").notNull(),
+  entityId: int("entityId"),
+  weight: double("weight"),
+  contributionType: mysqlEnum("contributionType", ["sum", "avg", "latest"]).default("sum").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type GoalMetricLink = typeof goalMetricLinks.$inferSelect;
+export type InsertGoalMetricLink = typeof goalMetricLinks.$inferInsert;
+
 export const metricValues = mysqlTable("metric_values", {
   id: int("id").autoincrement().primaryKey(),
   reportId: int("reportId").notNull(),

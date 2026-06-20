@@ -42,8 +42,8 @@ const menuItems = [
   { icon: FileBarChart, label: "التقارير", path: "/reports" },
   { icon: Boxes, label: "الكيانات التنفيذية", path: "/items" },
   { icon: Gauge, label: "المسارات والأهداف", path: "/pulse" },
-  { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/compare" },
-  { icon: History, label: "تقارير الداعمين", path: "/history" },
+  { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/pulse" },
+  { icon: History, label: "تقارير الداعمين", path: "/reports" },
   { icon: SheetIcon, label: "الإعدادات", path: "/integrations" },
 ];
 
@@ -134,7 +134,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 location === item.path ||
                 (item.path !== "/" && location.startsWith(item.path));
               return (
-                <SidebarMenuItem key={item.path}>
+                <SidebarMenuItem key={`${item.label}-${item.path}`}>
                   <SidebarMenuButton
                     isActive={isActive}
                     onClick={() => setLocation(item.path)}
