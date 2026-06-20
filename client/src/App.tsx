@@ -16,12 +16,16 @@ import ItemsOverview from "./pages/ItemsOverview";
 import PulseAdmin from "./pages/PulseAdmin";
 import EntityDetail from "./pages/EntityDetail";
 import GoalDetail from "./pages/GoalDetail";
+import SubmissionLinks from "./pages/SubmissionLinks";
+import PublicSubmission, { PublicSubmissionSuccess } from "./pages/PublicSubmission";
 
 function Router() {
   return (
     <Switch>
       {/* Preview is full-bleed (no sidebar) for clean PDF capture */}
       <Route path="/reports/:id/preview" component={Preview} />
+      <Route path="/submit/:token/success" component={PublicSubmissionSuccess} />
+      <Route path="/submit/:token" component={PublicSubmission} />
 
       <Route path="/">
         <DashboardLayout>
@@ -61,6 +65,11 @@ function Router() {
       <Route path="/goals/:id">
         <DashboardLayout>
           <GoalDetail />
+        </DashboardLayout>
+      </Route>
+      <Route path="/pulse/submission-links">
+        <DashboardLayout>
+          <SubmissionLinks />
         </DashboardLayout>
       </Route>
       <Route path="/pulse">

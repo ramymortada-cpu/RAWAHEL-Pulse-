@@ -247,6 +247,11 @@ export const metricValues = mysqlTable("metric_values", {
   valueText: text("valueText"),
   notes: text("notes"),
   source: varchar("source", { length: 255 }),
+  submissionLinkId: int("submissionLinkId"),
+  submittedByName: varchar("submittedByName", { length: 255 }),
+  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved"]).default("approved").notNull(),
+  reviewedByUserId: int("reviewedByUserId"),
+  reviewedAt: timestamp("reviewedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -265,6 +270,8 @@ export const evidenceAssets = mysqlTable("evidence_assets", {
   url: varchar("url", { length: 1024 }).notNull(),
   fileKey: varchar("fileKey", { length: 512 }),
   isDonorFacing: boolean("isDonorFacing").default(true).notNull(),
+  submissionLinkId: int("submissionLinkId"),
+  submissionStatus: mysqlEnum("submissionStatus", ["draft", "submitted", "reviewed", "approved"]).default("approved").notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -272,6 +279,29 @@ export const evidenceAssets = mysqlTable("evidence_assets", {
 
 export type EvidenceAsset = typeof evidenceAssets.$inferSelect;
 export type InsertEvidenceAsset = typeof evidenceAssets.$inferInsert;
+
+export const submissionLinks = mysqlTable("submission_links", {
+  id: int("id").autoincrement().primaryKey(),
+  tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+  reportId: int("reportId").notNull(),
+  entityId: int("entityId").notNull(),
+  managerName: varchar("managerName", { length: 255 }).notNull(),
+  managerEmail: varchar("managerEmail", { length: 320 }),
+  managerPhone: varchar("managerPhone", { length: 64 }),
+  status: mysqlEnum("status", ["created", "opened", "draft", "submitted", "reviewed", "approved", "revoked", "expired", "needs_revision"]).default("created").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  openedAt: timestamp("openedAt"),
+  lastSavedAt: timestamp("lastSavedAt"),
+  submittedAt: timestamp("submittedAt"),
+  reviewedAt: timestamp("reviewedAt"),
+  approvedAt: timestamp("approvedAt"),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SubmissionLink = typeof submissionLinks.$inferSelect;
+export type InsertSubmissionLink = typeof submissionLinks.$inferInsert;
 
 export const reportExports = mysqlTable("report_exports", {
   id: int("id").autoincrement().primaryKey(),

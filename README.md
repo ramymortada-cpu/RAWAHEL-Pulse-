@@ -11,6 +11,7 @@ RAWAHEL Pulse is an Arabic-first impact measurement and reporting system for Raw
 - Monthly, quarterly, semiannual, and annual report periods.
 - Report audiences: internal, donor, board, and public.
 - Evidence/story links for donor-facing reporting.
+- External monthly submission links for entity managers.
 - Three report templates: Monthly, Donor, and Annual.
 - Premium report preview with browser-side PDF and PNG export.
 - Entity-first report entry, entity details, and goal details.
@@ -175,3 +176,37 @@ Goal progress is intentionally explainable: RAWAHEL Pulse only calculates a stra
 6. Click **تصدير PDF** or **تصدير صورة PNG**.
 
 The export is browser-side and works locally. Remote upload/storage is optional and best-effort only.
+
+### Generate Monthly Submission Links
+
+1. Open `/pulse/submission-links`.
+2. Choose the report period.
+3. Choose the entity.
+4. Enter the manager name and optional email/phone.
+5. Click **إنشاء رابط خاص**.
+6. Copy the generated `/submit/:token` link and send it manually to the manager.
+
+The raw token is shown only when generated or regenerated. The database stores only `tokenHash`, not the raw token.
+
+### Entity Manager Submission Flow
+
+1. The manager opens `/submit/:token`.
+2. The page is standalone: no sidebar, no dashboard, no internal navigation.
+3. The manager sees only:
+   - entity name
+   - report period
+   - linked strategic goals
+   - KPIs available for that entity
+   - achievements, notes, support needs, and evidence/story fields
+4. The manager can click **حفظ مسودة** or **إرسال نهائي**.
+5. Revoked or expired links show a friendly Arabic error page.
+
+### Review And Approve External Submissions
+
+1. Open `/pulse/submission-links`.
+2. Select **مراجعة** beside a submitted link.
+3. Review KPI values and donor-facing evidence.
+4. Click **اعتماد البيانات** to make the values and evidence usable in dashboard/report calculations.
+5. Click **طلب تعديل** if the manager needs to revise and resubmit.
+
+Pending external values are not final report data. RAWAHEL Pulse includes submitted values/evidence in dashboard and donor reports only after approval. Internal manual entries remain approved by default.

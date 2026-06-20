@@ -1,4 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   entities,
@@ -13,12 +14,14 @@ import {
   InsertMetricDefinition,
   InsertMetricValue,
   InsertReportExport,
+  InsertSubmissionLink,
   InsertStrategicGoal,
   InsertStrategicTrack,
   InsertUser,
   metricDefinitions,
   metricValues,
   reportExports,
+  submissionLinks,
   strategicGoals,
   strategicTracks,
   users,
@@ -240,6 +243,13 @@ export async function deleteReport(ownerId: number, id: number) {
   await db.delete(departmentItems).where(eq(departmentItems.reportId, id));
   await db.delete(departmentData).where(eq(departmentData.reportId, id));
   await db.delete(reports).where(and(eq(reports.id, id), eq(reports.ownerId, ownerId)));
+}
+
+async function getReportByIdForSubmission(id: number) {
+  const db = await getDb();
+  if (!db) return localReports.find((report) => report.id === id);
+  const rows = await db.select().from(reports).where(eq(reports.id, id)).limit(1);
+  return rows[0];
 }
 
 /* ---------------------- Department items (named sub-items) ---------------------- */
@@ -510,6 +520,7 @@ type PulseCache = {
   metricValues: Array<typeof metricValues.$inferSelect>;
   evidenceAssets: Array<typeof evidenceAssets.$inferSelect>;
   reportExports: Array<typeof reportExports.$inferSelect>;
+  submissionLinks: Array<typeof submissionLinks.$inferSelect>;
 };
 
 let pulseCache: PulseCache | null = null;
@@ -635,6 +646,7 @@ function getPulseCache(): PulseCache {
     metricValues: [],
     evidenceAssets: [],
     reportExports: [],
+    submissionLinks: [],
   };
   return pulseCache;
 }
@@ -807,6 +819,7 @@ export async function getPulseMasterData(): Promise<PulseCache> {
     metricValues: [] as Array<typeof metricValues.$inferSelect>,
     evidenceAssets: [] as Array<typeof evidenceAssets.$inferSelect>,
     reportExports: [] as Array<typeof reportExports.$inferSelect>,
+    submissionLinks: [] as Array<typeof submissionLinks.$inferSelect>,
   };
 }
 
@@ -1043,7 +1056,8 @@ export async function upsertPulseMetricValue(data: InsertMetricValue) {
       (value) =>
         value.reportId === data.reportId &&
         value.entityId === data.entityId &&
-        value.metricDefinitionId === data.metricDefinitionId
+        value.metricDefinitionId === data.metricDefinitionId &&
+        (value.submissionLinkId ?? null) === (data.submissionLinkId ?? null)
     );
     if (existing) {
       Object.assign(existing, data, { updatedAt: now() });
@@ -1058,6 +1072,11 @@ export async function upsertPulseMetricValue(data: InsertMetricValue) {
       valueText: data.valueText ?? null,
       notes: data.notes ?? null,
       source: data.source ?? null,
+      submissionLinkId: data.submissionLinkId ?? null,
+      submittedByName: data.submittedByName ?? null,
+      submissionStatus: data.submissionStatus ?? "approved" as const,
+      reviewedByUserId: data.reviewedByUserId ?? null,
+      reviewedAt: data.reviewedAt ?? null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -1071,7 +1090,10 @@ export async function upsertPulseMetricValue(data: InsertMetricValue) {
       and(
         eq(metricValues.reportId, data.reportId),
         eq(metricValues.entityId, data.entityId),
-        eq(metricValues.metricDefinitionId, data.metricDefinitionId)
+        eq(metricValues.metricDefinitionId, data.metricDefinitionId),
+        data.submissionLinkId == null
+          ? isNull(metricValues.submissionLinkId)
+          : eq(metricValues.submissionLinkId, data.submissionLinkId)
       )
     )
     .limit(1);
@@ -1104,6 +1126,8 @@ export async function createPulseEvidence(data: InsertEvidenceAsset) {
       url: data.url,
       fileKey: data.fileKey ?? null,
       isDonorFacing: data.isDonorFacing ?? true,
+      submissionLinkId: data.submissionLinkId ?? null,
+      submissionStatus: data.submissionStatus ?? "approved" as const,
       sortOrder: data.sortOrder ?? cache.evidenceAssets.length + 1,
       createdAt: now(),
       updatedAt: now(),
@@ -1126,6 +1150,293 @@ export async function getPulseEvidence(reportId?: number) {
     : db.select().from(evidenceAssets);
 }
 
+function generateSubmissionToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+function hashSubmissionToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function defaultSubmissionExpiry() {
+  const expiresAt = now();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  return expiresAt;
+}
+
+export async function createPulseSubmissionLink(data: {
+  reportId: number;
+  entityId: number;
+  managerName: string;
+  managerEmail?: string | null;
+  managerPhone?: string | null;
+  createdByUserId?: number | null;
+  expiresAt?: Date | null;
+}) {
+  const rawToken = generateSubmissionToken();
+  const tokenHash = hashSubmissionToken(rawToken);
+  const db = await getDb();
+  const rowData: InsertSubmissionLink = {
+    tokenHash,
+    reportId: data.reportId,
+    entityId: data.entityId,
+    managerName: data.managerName,
+    managerEmail: data.managerEmail ?? null,
+    managerPhone: data.managerPhone ?? null,
+    status: "created",
+    expiresAt: data.expiresAt ?? defaultSubmissionExpiry(),
+    createdByUserId: data.createdByUserId ?? null,
+  };
+  if (!db) {
+    const createdAt = now();
+    const row = {
+      id: nextPulseId(),
+      ...rowData,
+      status: "created" as const,
+      managerEmail: rowData.managerEmail ?? null,
+      managerPhone: rowData.managerPhone ?? null,
+      createdByUserId: rowData.createdByUserId ?? null,
+      openedAt: null,
+      lastSavedAt: null,
+      submittedAt: null,
+      reviewedAt: null,
+      approvedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    getPulseCache().submissionLinks.push(row);
+    return { link: row, rawToken };
+  }
+  const result = await db.insert(submissionLinks).values(rowData).$returningId();
+  const id = result[0]?.id as number;
+  const rows = await db.select().from(submissionLinks).where(eq(submissionLinks.id, id)).limit(1);
+  return { link: rows[0], rawToken };
+}
+
+export async function listPulseSubmissionLinks() {
+  const db = await getDb();
+  if (!db) return getPulseCache().submissionLinks.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return db.select().from(submissionLinks).orderBy(desc(submissionLinks.createdAt));
+}
+
+export async function revokePulseSubmissionLink(id: number) {
+  const db = await getDb();
+  if (!db) {
+    const link = getPulseCache().submissionLinks.find((item) => item.id === id);
+    if (link) Object.assign(link, { status: "revoked" as const, updatedAt: now() });
+    return;
+  }
+  await db.update(submissionLinks).set({ status: "revoked" }).where(eq(submissionLinks.id, id));
+}
+
+export async function regeneratePulseSubmissionLink(id: number) {
+  const rawToken = generateSubmissionToken();
+  const tokenHash = hashSubmissionToken(rawToken);
+  const expiresAt = defaultSubmissionExpiry();
+  const db = await getDb();
+  if (!db) {
+    const link = getPulseCache().submissionLinks.find((item) => item.id === id);
+    if (!link) return undefined;
+    Object.assign(link, {
+      tokenHash,
+      status: "created" as const,
+      expiresAt,
+      openedAt: null,
+      lastSavedAt: null,
+      submittedAt: null,
+      reviewedAt: null,
+      approvedAt: null,
+      updatedAt: now(),
+    });
+    return { link, rawToken };
+  }
+  await db.update(submissionLinks).set({
+    tokenHash,
+    status: "created",
+    expiresAt,
+    openedAt: null,
+    lastSavedAt: null,
+    submittedAt: null,
+    reviewedAt: null,
+    approvedAt: null,
+  }).where(eq(submissionLinks.id, id));
+  const rows = await db.select().from(submissionLinks).where(eq(submissionLinks.id, id)).limit(1);
+  return rows[0] ? { link: rows[0], rawToken } : undefined;
+}
+
+export async function getPulseSubmissionReview(id: number) {
+  const links = await listPulseSubmissionLinks();
+  const link = links.find((item) => item.id === id);
+  if (!link) return undefined;
+  const [master, report, values, evidence] = await Promise.all([
+    getPulseMasterData(),
+    getReportByIdForSubmission(link.reportId),
+    getPulseReportValues(link.reportId),
+    getPulseEvidence(link.reportId),
+  ]);
+  return {
+    link,
+    entity: master.entities.find((entity) => entity.id === link.entityId),
+    report,
+    values: values.filter((value) => value.submissionLinkId === link.id),
+    evidence: evidence.filter((item) => item.submissionLinkId === link.id),
+  };
+}
+
+async function getSubmissionLinkByToken(token: string, markOpened = false) {
+  const tokenHash = hashSubmissionToken(token);
+  const db = await getDb();
+  const rows = !db
+    ? getPulseCache().submissionLinks.filter((link) => link.tokenHash === tokenHash)
+    : await db.select().from(submissionLinks).where(eq(submissionLinks.tokenHash, tokenHash)).limit(1);
+  const link = rows[0];
+  if (!link) throw new Error("invalid");
+  if (link.status === "revoked") throw new Error("revoked");
+  if (link.expiresAt.getTime() < Date.now() || link.status === "expired") {
+    if (!db) Object.assign(link, { status: "expired" as const, updatedAt: now() });
+    else await db.update(submissionLinks).set({ status: "expired" }).where(eq(submissionLinks.id, link.id));
+    throw new Error("expired");
+  }
+  if (markOpened && link.status === "created") {
+    const openedAt = now();
+    if (!db) Object.assign(link, { status: "opened" as const, openedAt, updatedAt: openedAt });
+    else await db.update(submissionLinks).set({ status: "opened", openedAt }).where(eq(submissionLinks.id, link.id));
+    return { ...link, status: "opened" as const, openedAt };
+  }
+  return link;
+}
+
+export async function getPulseSubmissionByToken(token: string) {
+  const link = await getSubmissionLinkByToken(token, true);
+  const [master, report, values, evidence] = await Promise.all([
+    getPulseMasterData(),
+    getReportByIdForSubmission(link.reportId),
+    getPulseReportValues(link.reportId),
+    getPulseEvidence(link.reportId),
+  ]);
+  const entity = master.entities.find((item) => item.id === link.entityId);
+  if (!entity) throw new Error("invalid");
+  const goalIds = new Set(master.entityGoalLinks.filter((item) => item.entityId === entity.id).map((item) => item.goalId));
+  return {
+    link: {
+      id: link.id,
+      reportId: link.reportId,
+      entityId: link.entityId,
+      managerName: link.managerName,
+      status: link.status,
+      expiresAt: link.expiresAt,
+    },
+    report,
+    entity,
+    goals: master.goals.filter((goal) => goalIds.has(goal.id)),
+    metrics: await getMetricsForEntity(entity.id),
+    values: values.filter((value) => value.submissionLinkId === link.id),
+    evidence: evidence.filter((item) => item.submissionLinkId === link.id),
+  };
+}
+
+export async function savePulseSubmission(token: string, data: {
+  values: Array<{ metricDefinitionId: number; valueNumber?: number | null; valueText?: string | null; notes?: string | null }>;
+  achievements?: string[];
+  operationsNotes?: string | null;
+  supportNeeded?: string | null;
+  evidence?: Array<{ titleAr: string; descriptionAr?: string | null; url: string; type?: "image" | "video" | "link" | "document" | "testimonial" | "story"; isDonorFacing?: boolean }>;
+  final?: boolean;
+}) {
+  const link = await getSubmissionLinkByToken(token);
+  const metrics = await getMetricsForEntity(link.entityId);
+  const allowedMetricIds = new Set(metrics.map((metric) => metric.id));
+  const status = data.final ? "submitted" : "draft";
+  for (const value of data.values) {
+    if (!allowedMetricIds.has(value.metricDefinitionId)) {
+      throw new Error("metric_scope_violation");
+    }
+    await upsertPulseMetricValue({
+      reportId: link.reportId,
+      entityId: link.entityId,
+      metricDefinitionId: value.metricDefinitionId,
+      valueNumber: value.valueNumber ?? null,
+      valueText: value.valueText ?? null,
+      notes: value.notes ?? null,
+      source: "external_submission",
+      submissionLinkId: link.id,
+      submittedByName: link.managerName,
+      submissionStatus: status,
+    });
+  }
+  const noteParts = [
+    ...(data.achievements ?? []).filter(Boolean).map((item, index) => `إنجاز ${index + 1}: ${item}`),
+    data.operationsNotes ? `ملاحظات تشغيلية: ${data.operationsNotes}` : "",
+    data.supportNeeded ? `احتياج أو دعم مطلوب: ${data.supportNeeded}` : "",
+  ].filter(Boolean);
+  if (noteParts.length > 0) {
+    await createPulseEvidence({
+      reportId: link.reportId,
+      entityId: link.entityId,
+      titleAr: data.final ? "ملخص إنجازات شهري مقدم" : "مسودة إنجازات شهرية",
+      descriptionAr: noteParts.join("\n"),
+      type: "story",
+      url: "external-submission",
+      isDonorFacing: true,
+      submissionLinkId: link.id,
+      submissionStatus: status,
+      sortOrder: 0,
+    });
+  }
+  for (const item of data.evidence ?? []) {
+    if (!item.titleAr || !item.url) continue;
+    await createPulseEvidence({
+      reportId: link.reportId,
+      entityId: link.entityId,
+      titleAr: item.titleAr,
+      descriptionAr: item.descriptionAr ?? null,
+      type: item.type ?? "link",
+      url: item.url,
+      isDonorFacing: item.isDonorFacing ?? true,
+      submissionLinkId: link.id,
+      submissionStatus: status,
+      sortOrder: 0,
+    });
+  }
+  const patch = data.final
+    ? { status: "submitted" as const, submittedAt: now(), lastSavedAt: now() }
+    : { status: "draft" as const, lastSavedAt: now() };
+  const db = await getDb();
+  if (!db) Object.assign(link, patch, { updatedAt: now() });
+  else await db.update(submissionLinks).set(patch).where(eq(submissionLinks.id, link.id));
+  return { success: true, status };
+}
+
+export async function approvePulseSubmission(id: number, reviewedByUserId: number) {
+  const reviewedAt = now();
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const link = cache.submissionLinks.find((item) => item.id === id);
+    if (link) Object.assign(link, { status: "approved" as const, reviewedAt, approvedAt: reviewedAt, updatedAt: reviewedAt });
+    cache.metricValues
+      .filter((value) => value.submissionLinkId === id)
+      .forEach((value) => Object.assign(value, { submissionStatus: "approved" as const, reviewedByUserId, reviewedAt, updatedAt: reviewedAt }));
+    cache.evidenceAssets
+      .filter((item) => item.submissionLinkId === id)
+      .forEach((item) => Object.assign(item, { submissionStatus: "approved" as const, updatedAt: reviewedAt }));
+    return;
+  }
+  await db.update(submissionLinks).set({ status: "approved", reviewedAt, approvedAt: reviewedAt }).where(eq(submissionLinks.id, id));
+  await db.update(metricValues).set({ submissionStatus: "approved", reviewedByUserId, reviewedAt }).where(eq(metricValues.submissionLinkId, id));
+  await db.update(evidenceAssets).set({ submissionStatus: "approved" }).where(eq(evidenceAssets.submissionLinkId, id));
+}
+
+export async function requestPulseSubmissionRevision(id: number) {
+  const db = await getDb();
+  if (!db) {
+    const link = getPulseCache().submissionLinks.find((item) => item.id === id);
+    if (link) Object.assign(link, { status: "needs_revision" as const, reviewedAt: now(), updatedAt: now() });
+    return;
+  }
+  await db.update(submissionLinks).set({ status: "needs_revision", reviewedAt: now() }).where(eq(submissionLinks.id, id));
+}
+
 export async function createPulseReportExport(data: InsertReportExport) {
   const db = await getDb();
   if (!db) {
@@ -1141,7 +1452,8 @@ export async function createPulseReportExport(data: InsertReportExport) {
 export async function getPulseDashboard(reportId?: number) {
   const master = await getPulseMasterData();
   const reportValues = reportId ? await getPulseReportValues(reportId) : [];
-  const valuesWithKeys = reportValues.map((value) => {
+  const approvedReportValues = reportValues.filter((value) => value.submissionStatus === "approved");
+  const valuesWithKeys = approvedReportValues.map((value) => {
     const def = master.metricDefinitions.find((metricDef: typeof master.metricDefinitions[number]) => metricDef.id === value.metricDefinitionId);
     return {
       entityId: value.entityId,
@@ -1169,8 +1481,9 @@ export async function getPulseDashboard(reportId?: number) {
       .map((metricDefinitionId) => master.metricDefinitions.find((metric) => metric.id === metricDefinitionId)?.nameAr)
       .filter((name): name is string => Boolean(name)),
   }));
-  const evidence = reportId ? await getPulseEvidence(reportId) : await getPulseEvidence();
-  const entitiesWithValues = new Set(reportValues.map((value) => value.entityId));
+  const evidenceRows = reportId ? await getPulseEvidence(reportId) : await getPulseEvidence();
+  const evidence = evidenceRows.filter((item) => item.submissionStatus === "approved");
+  const entitiesWithValues = new Set(approvedReportValues.map((value) => value.entityId));
   const missingSubmissions = reportId
     ? master.entities.filter(
         (entity: typeof master.entities[number]) =>

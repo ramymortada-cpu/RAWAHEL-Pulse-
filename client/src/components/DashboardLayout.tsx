@@ -29,6 +29,7 @@ import {
   History,
   GitCompareArrows,
   ImagePlus,
+  Link as LinkIcon,
   Sheet as SheetIcon,
   Menu as MenuIcon,
   Boxes,
@@ -47,6 +48,7 @@ const menuItems = [
   { icon: Gauge, label: "المؤشرات", path: "/pulse#metrics" },
   { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/pulse#values" },
   { icon: ImagePlus, label: "شواهد الأثر", path: "/pulse#evidence" },
+  { icon: LinkIcon, label: "روابط الإدخال الشهري", path: "/pulse/submission-links" },
   { icon: History, label: "تقارير الداعمين", path: "/reports#donor" },
   { icon: SheetIcon, label: "الإعدادات", path: "/integrations" },
 ];

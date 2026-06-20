@@ -1,21 +1,30 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { adminProcedure, editorProcedure, protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, editorProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
+  approvePulseSubmission,
   archivePulseEntity,
   createPulseEntity,
   createPulseEvidence,
   createPulseMetricDefinition,
   createPulseReportExport,
+  createPulseSubmissionLink,
   createPulseStrategicGoal,
   createPulseStrategicTrack,
   getMetricsForEntity,
   getPulseDashboard,
   getPulseMasterData,
   getPulseReportValues,
+  getPulseSubmissionByToken,
+  getPulseSubmissionReview,
   linkPulseGoalToMetrics,
   linkPulseEntityToGoals,
   linkPulseEntityToTracks,
+  listPulseSubmissionLinks,
+  regeneratePulseSubmissionLink,
+  requestPulseSubmissionRevision,
+  revokePulseSubmissionLink,
+  savePulseSubmission,
   seedPulseMasterData,
   updatePulseEntity,
   updatePulseStrategicGoal,
@@ -41,11 +50,144 @@ const metricAggregationSchema = z.enum(["sum", "avg", "latest", "max", "min"]);
 const metricDirectionSchema = z.enum(["higher_is_better", "lower_is_better", "neutral"]);
 const metricScopeSchema = z.enum(["additive", "non_additive", "latest"]);
 const goalPeriodSchema = z.enum(["yearly", "two_years", "monthly", "custom"]);
+const submissionEvidenceSchema = z.object({
+  titleAr: z.string().optional().default(""),
+  descriptionAr: z.string().nullable().optional(),
+  url: z.string().optional().default(""),
+  type: z.enum(["image", "video", "link", "document", "testimonial", "story"]).default("link"),
+  isDonorFacing: z.boolean().default(true),
+});
+const submissionPayloadSchema = z.object({
+  token: z.string().min(16),
+  values: z.array(
+    z.object({
+      metricDefinitionId: z.number(),
+      valueNumber: z.number().nullable().optional(),
+      valueText: z.string().nullable().optional(),
+      notes: z.string().nullable().optional(),
+    })
+  ).default([]),
+  achievements: z.array(z.string()).default([]),
+  operationsNotes: z.string().nullable().optional(),
+  supportNeeded: z.string().nullable().optional(),
+  evidence: z.array(submissionEvidenceSchema).default([]),
+});
+
+function publicSubmissionLink<T extends { tokenHash?: string }>(link: T) {
+  const { tokenHash: _tokenHash, ...safeLink } = link;
+  return safeLink;
+}
 
 export const pulseRouter = router({
   masterData: protectedProcedure.query(() => getPulseMasterData()),
 
   seedDefaults: adminProcedure.mutation(() => seedPulseMasterData()),
+
+  createSubmissionLink: adminProcedure
+    .input(
+      z.object({
+        reportId: z.number(),
+        entityId: z.number(),
+        managerName: z.string().min(2),
+        managerEmail: z.string().email().optional().or(z.literal("")),
+        managerPhone: z.string().optional(),
+        expiresAt: z.date().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await createPulseSubmissionLink({
+        reportId: input.reportId,
+        entityId: input.entityId,
+        managerName: input.managerName,
+        managerEmail: input.managerEmail || null,
+        managerPhone: input.managerPhone || null,
+        expiresAt: input.expiresAt ?? null,
+        createdByUserId: ctx.user.id,
+      });
+      return { link: publicSubmissionLink(result.link), rawToken: result.rawToken };
+    }),
+
+  listSubmissionLinks: adminProcedure.query(async () => {
+    const links = await listPulseSubmissionLinks();
+    return links.map(publicSubmissionLink);
+  }),
+
+  revokeSubmissionLink: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await revokePulseSubmissionLink(input.id);
+      return { success: true };
+    }),
+
+  regenerateSubmissionLink: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const result = await regeneratePulseSubmissionLink(input.id);
+      if (!result) throw new TRPCError({ code: "NOT_FOUND" });
+      return { link: publicSubmissionLink(result.link), rawToken: result.rawToken };
+    }),
+
+  getSubmissionReview: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const review = await getPulseSubmissionReview(input.id);
+      if (!review) throw new TRPCError({ code: "NOT_FOUND" });
+      return { ...review, link: publicSubmissionLink(review.link) };
+    }),
+
+  approveSubmission: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await approvePulseSubmission(input.id, ctx.user.id);
+      return { success: true };
+    }),
+
+  requestSubmissionRevision: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await requestPulseSubmissionRevision(input.id);
+      return { success: true };
+    }),
+
+  getSubmissionByToken: publicProcedure
+    .input(z.object({ token: z.string().min(16) }))
+    .query(async ({ input }) => {
+      try {
+        return await getPulseSubmissionByToken(input.token);
+      } catch (error) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            error instanceof Error && error.message === "expired"
+              ? "انتهت صلاحية رابط الإدخال"
+              : error instanceof Error && error.message === "revoked"
+                ? "تم إلغاء رابط الإدخال"
+                : "رابط الإدخال غير صالح",
+        });
+      }
+    }),
+
+  saveSubmissionDraft: publicProcedure
+    .input(submissionPayloadSchema)
+    .mutation(async ({ input }) => {
+      try {
+        await savePulseSubmission(input.token, { ...input, final: false });
+        return { success: true };
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "تعذر حفظ المسودة" });
+      }
+    }),
+
+  submitSubmissionFinal: publicProcedure
+    .input(submissionPayloadSchema)
+    .mutation(async ({ input }) => {
+      try {
+        await savePulseSubmission(input.token, { ...input, final: true });
+        return { success: true };
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "تعذر إرسال البيانات" });
+      }
+    }),
 
   dashboard: protectedProcedure
     .input(z.object({ reportId: z.number().optional() }).optional())
