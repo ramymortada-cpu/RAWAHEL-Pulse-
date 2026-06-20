@@ -13,10 +13,12 @@ import {
   getMetricsForEntity,
   getPulseMasterData,
   getPulseSubmissionByToken,
+  getPulseSubmissionReview,
   linkPulseGoalToMetrics,
   linkPulseEntityToGoals,
   linkPulseEntityToTracks,
   listPulseSubmissionLinks,
+  regeneratePulseSubmissionLink,
   revokePulseSubmissionLink,
   savePulseSubmission,
   seedPulseMasterData,
@@ -300,8 +302,14 @@ describe("RAWAHEL Pulse operations", () => {
       values: [{ metricDefinitionId: metricAId, valueNumber: 40 }],
       achievements: ["إنجاز اختباري"],
       evidence: [{ titleAr: "شاهد رابط نهائي", url: "https://example.com/evidence-final", isDonorFacing: true }],
+      // Malicious client fields are intentionally ignored; token scope wins.
+      entityId: entityBId,
+      reportId: reportId + 999,
       final: true,
-    });
+    } as Parameters<typeof savePulseSubmission>[1] & { entityId: number; reportId: number });
+    const review = await getPulseSubmissionReview(link.id);
+    expect(review?.values[0]).toMatchObject({ entityId: entityAId, reportId });
+    expect(review?.evidence.every((item) => item.entityId === entityAId && item.reportId === reportId)).toBe(true);
     const beforeApproval = await getPulseDashboard(reportId);
     expect(beforeApproval.goalProgress.find((goal) => goal.goalId === goalId)).toMatchObject({ actual: 0, progress: 0 });
 
@@ -327,8 +335,38 @@ describe("RAWAHEL Pulse operations", () => {
     const revoked = await createPulseSubmissionLink({ reportId, entityId, managerName: "ملغي", createdByUserId: 1 });
     await revokePulseSubmissionLink(revoked.link.id);
     await expect(getPulseSubmissionByToken(revoked.rawToken)).rejects.toThrow(/revoked/);
+    await expect(
+      savePulseSubmission(revoked.rawToken, { values: [], final: false })
+    ).rejects.toThrow(/revoked/);
+    await expect(
+      savePulseSubmission(revoked.rawToken, { values: [], final: true })
+    ).rejects.toThrow(/revoked/);
     const expiredDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const expired = await createPulseSubmissionLink({ reportId, entityId, managerName: "منتهي", createdByUserId: 1, expiresAt: expiredDate });
     await expect(getPulseSubmissionByToken(expired.rawToken)).rejects.toThrow(/expired/);
+  });
+
+  it("regenerated external submission links invalidate the previous raw token", async () => {
+    await seedPulseMasterData();
+    const reportId = await createReport({
+      ownerId: 1,
+      title: "تقرير إعادة إصدار رابط",
+      year: 2026,
+      month: 8,
+      periodType: "monthly",
+      audience: "internal",
+      status: "draft",
+    });
+    const entityId = (await getPulseMasterData()).entities[0].id;
+    const first = await createPulseSubmissionLink({ reportId, entityId, managerName: "مدير", createdByUserId: 1 });
+    const oldTokenHash = first.link.tokenHash;
+    const regenerated = await regeneratePulseSubmissionLink(first.link.id);
+    expect(regenerated?.rawToken).toBeTruthy();
+    expect(regenerated?.rawToken).not.toBe(first.rawToken);
+    expect(regenerated?.link.tokenHash).not.toBe(oldTokenHash);
+    await expect(getPulseSubmissionByToken(first.rawToken)).rejects.toThrow(/invalid/);
+    await expect(getPulseSubmissionByToken(regenerated!.rawToken)).resolves.toMatchObject({
+      entity: expect.objectContaining({ id: entityId }),
+    });
   });
 });

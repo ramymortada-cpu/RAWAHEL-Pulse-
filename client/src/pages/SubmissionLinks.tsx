@@ -20,6 +20,17 @@ const statusLabels: Record<string, string> = {
   expired: "منتهي",
 };
 
+const statusClasses: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  submitted: "bg-amber-100 text-amber-800",
+  approved: "bg-emerald-100 text-emerald-800",
+  needs_revision: "bg-orange-100 text-orange-800",
+  revoked: "bg-red-100 text-red-800",
+  expired: "bg-zinc-100 text-zinc-700",
+  opened: "bg-blue-100 text-blue-800",
+  created: "bg-slate-100 text-slate-700",
+};
+
 function fmtDate(value?: Date | string | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -183,14 +194,18 @@ export default function SubmissionLinks() {
           <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-extrabold text-[#1b2a5e]">الروابط الحالية</h2>
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead>
                   <tr className="border-b text-right text-slate-500">
                     <th className="p-2">الكيان</th>
                     <th className="p-2">التقرير</th>
                     <th className="p-2">المسؤول</th>
                     <th className="p-2">الحالة</th>
+                    <th className="p-2">ينتهي في</th>
+                    <th className="p-2">تم فتحه؟</th>
                     <th className="p-2">آخر فتح</th>
+                    <th className="p-2">آخر حفظ</th>
+                    <th className="p-2">تاريخ الإرسال</th>
                     <th className="p-2">إجراءات</th>
                   </tr>
                 </thead>
@@ -203,11 +218,24 @@ export default function SubmissionLinks() {
                         <td className="p-2 font-bold text-[#1b2a5e]">{entity?.nameAr ?? link.entityId}</td>
                         <td className="p-2">{report ? `${monthName(report.month)} ${report.year}` : link.reportId}</td>
                         <td className="p-2">{link.managerName}</td>
-                        <td className="p-2"><Badge variant="secondary">{statusLabels[link.status] ?? link.status}</Badge></td>
+                        <td className="p-2">
+                          <Badge className={statusClasses[link.status] ?? "bg-slate-100 text-slate-700"}>
+                            {statusLabels[link.status] ?? link.status}
+                          </Badge>
+                        </td>
+                        <td className="p-2">{fmtDate(link.expiresAt)}</td>
+                        <td className="p-2">{link.openedAt ? "نعم" : "لا"}</td>
                         <td className="p-2">{fmtDate(link.openedAt)}</td>
+                        <td className="p-2">{fmtDate(link.lastSavedAt)}</td>
+                        <td className="p-2">{fmtDate(link.submittedAt)}</td>
                         <td className="p-2">
                           <div className="flex flex-wrap gap-1">
                             <Button size="sm" variant="outline" onClick={() => setSelectedLinkId(link.id)}>مراجعة</Button>
+                            {["submitted", "approved", "reviewed"].includes(link.status) && (
+                              <Button size="sm" variant="outline" onClick={() => requestRevision.mutate({ id: link.id })}>
+                                إعادة فتح للتعديل
+                              </Button>
+                            )}
                             <Button size="sm" variant="ghost" onClick={() => regenerateLink.mutate({ id: link.id })}><RotateCw className="h-4 w-4" /></Button>
                             <Button size="sm" variant="ghost" onClick={() => revokeLink.mutate({ id: link.id })}><ShieldOff className="h-4 w-4" /></Button>
                           </div>

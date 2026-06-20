@@ -210,3 +210,12 @@ The raw token is shown only when generated or regenerated. The database stores o
 5. Click **طلب تعديل** if the manager needs to revise and resubmit.
 
 Pending external values are not final report data. RAWAHEL Pulse includes submitted values/evidence in dashboard and donor reports only after approval. Internal manual entries remain approved by default.
+
+### Submission Link Security Notes
+
+- Each submission link is scoped to exactly one entity and one report.
+- External form submissions always use the entity/report stored on the token record, never client-sent entity/report fields.
+- RAWAHEL Pulse stores only a hashed token (`tokenHash`); the raw token is shown only when generated or regenerated.
+- Regenerating a link invalidates the previous raw token.
+- Revoked or expired links cannot be opened, saved as draft, or submitted.
+- Official dashboards and donor reports include only approved external values and approved donor-facing evidence.

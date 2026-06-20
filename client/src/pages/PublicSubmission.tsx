@@ -38,6 +38,16 @@ export default function PublicSubmission() {
     onSuccess: () => setLocation(`/submit/${token}/success`),
     onError: (mutationError) => toast.error(mutationError.message),
   });
+  const handleSaveDraft = () => {
+    const ok = window.confirm("هل تريد حفظ البيانات كمسودة؟ يمكنك العودة لاستكمالها لاحقًا.");
+    if (!ok) return;
+    saveDraft.mutate(payload());
+  };
+  const handleSubmitFinal = () => {
+    const ok = window.confirm("بعد الإرسال النهائي ستقوم الإدارة بمراجعة البيانات قبل اعتمادها.");
+    if (!ok) return;
+    submitFinal.mutate(payload());
+  };
 
   const missingCount = useMemo(() => {
     if (!data) return 0;
@@ -204,11 +214,11 @@ export default function PublicSubmission() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-600">يمكن حفظ مسودة ناقصة، أما الإرسال النهائي فسيظهر للإدارة للمراجعة والاعتماد.</p>
             <div className="flex gap-2">
-              <Button variant="outline" disabled={saveDraft.isPending} onClick={() => saveDraft.mutate(payload())}>
+              <Button variant="outline" disabled={saveDraft.isPending} onClick={handleSaveDraft}>
                 <Save className="ml-2 h-4 w-4" />
-                حفظ مسودة
+                حفظ كمسودة
               </Button>
-              <Button className="bg-[#2e7d6b] hover:bg-[#256a5b]" disabled={submitFinal.isPending} onClick={() => submitFinal.mutate(payload())}>
+              <Button className="bg-[#2e7d6b] hover:bg-[#256a5b]" disabled={submitFinal.isPending} onClick={handleSubmitFinal}>
                 <Send className="ml-2 h-4 w-4" />
                 إرسال نهائي
               </Button>
@@ -223,12 +233,17 @@ export default function PublicSubmission() {
 export function PublicSubmissionSuccess() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f7f2e7] p-6" dir="rtl">
-      <div className="max-w-lg rounded-3xl bg-white p-8 text-center shadow-sm">
-        <CheckCircle2 className="mx-auto h-14 w-14 text-[#2e7d6b]" />
+      <div className="max-w-xl rounded-[2rem] border border-[#1b2a5e]/10 bg-white p-10 text-center shadow-xl">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
+          <CheckCircle2 className="h-12 w-12 text-[#2e7d6b]" />
+        </div>
         <h1 className="mt-4 text-3xl font-extrabold text-[#1b2a5e]">تم استلام بياناتكم بنجاح</h1>
         <p className="mt-3 text-sm leading-7 text-slate-600">
           شكرًا لكم. ستقوم إدارة رواحل بمراجعة البيانات قبل اعتمادها في التقرير.
         </p>
+        <div className="mt-6 rounded-2xl bg-[#f7f2e7] p-4 text-sm font-bold text-[#1b2a5e]">
+          يمكنكم إغلاق هذه الصفحة الآن. حفظ الله جهودكم وبارك أثرها.
+        </div>
       </div>
     </div>
   );

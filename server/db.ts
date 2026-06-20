@@ -1344,6 +1344,9 @@ export async function savePulseSubmission(token: string, data: {
   final?: boolean;
 }) {
   const link = await getSubmissionLinkByToken(token);
+  if (link.status === "approved" || link.status === "reviewed") {
+    throw new Error("locked");
+  }
   const metrics = await getMetricsForEntity(link.entityId);
   const allowedMetricIds = new Set(metrics.map((metric) => metric.id));
   const status = data.final ? "submitted" : "draft";
