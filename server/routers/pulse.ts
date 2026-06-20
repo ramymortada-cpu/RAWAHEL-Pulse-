@@ -7,6 +7,8 @@ import {
   createPulseEvidence,
   createPulseMetricDefinition,
   createPulseReportExport,
+  createPulseStrategicGoal,
+  createPulseStrategicTrack,
   getMetricsForEntity,
   getPulseDashboard,
   getPulseMasterData,
@@ -15,6 +17,8 @@ import {
   linkPulseEntityToTracks,
   seedPulseMasterData,
   updatePulseEntity,
+  updatePulseStrategicGoal,
+  updatePulseStrategicTrack,
   upsertPulseMetricValue,
 } from "../db";
 
@@ -35,6 +39,7 @@ const metricUnitSchema = z.enum(["count", "percent", "currency", "hours", "days"
 const metricAggregationSchema = z.enum(["sum", "avg", "latest", "max", "min"]);
 const metricDirectionSchema = z.enum(["higher_is_better", "lower_is_better", "neutral"]);
 const metricScopeSchema = z.enum(["additive", "non_additive", "latest"]);
+const goalPeriodSchema = z.enum(["yearly", "two_years", "monthly", "custom"]);
 
 export const pulseRouter = router({
   masterData: protectedProcedure.query(() => getPulseMasterData()),
@@ -44,6 +49,87 @@ export const pulseRouter = router({
   dashboard: protectedProcedure
     .input(z.object({ reportId: z.number().optional() }).optional())
     .query(({ input }) => getPulseDashboard(input?.reportId)),
+
+  createTrack: adminProcedure
+    .input(
+      z.object({
+        key: z.string().min(2),
+        nameAr: z.string().min(2),
+        descriptionAr: z.string().optional(),
+        color: z.string().default("#1b2a5e"),
+        icon: z.string().default("Circle"),
+        sortOrder: z.number().default(0),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const id = await createPulseStrategicTrack({
+        ...input,
+        descriptionAr: input.descriptionAr ?? null,
+        isActive: true,
+      });
+      return { id };
+    }),
+
+  updateTrack: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        nameAr: z.string().min(2).optional(),
+        descriptionAr: z.string().optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
+        sortOrder: z.number().optional(),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...patch } = input;
+      await updatePulseStrategicTrack(id, patch);
+      return { success: true };
+    }),
+
+  createGoal: adminProcedure
+    .input(
+      z.object({
+        key: z.string().min(2),
+        trackId: z.number().nullable().optional(),
+        nameAr: z.string().min(2),
+        descriptionAr: z.string().optional(),
+        targetValue: z.number().default(0),
+        targetUnit: z.string().default("عدد"),
+        periodType: goalPeriodSchema.default("yearly"),
+        sortOrder: z.number().default(0),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const id = await createPulseStrategicGoal({
+        ...input,
+        trackId: input.trackId ?? null,
+        descriptionAr: input.descriptionAr ?? null,
+        isActive: true,
+      });
+      return { id };
+    }),
+
+  updateGoal: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        trackId: z.number().nullable().optional(),
+        nameAr: z.string().min(2).optional(),
+        descriptionAr: z.string().optional(),
+        targetValue: z.number().optional(),
+        targetUnit: z.string().optional(),
+        periodType: goalPeriodSchema.optional(),
+        sortOrder: z.number().optional(),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...patch } = input;
+      await updatePulseStrategicGoal(id, patch);
+      return { success: true };
+    }),
 
   createEntity: adminProcedure
     .input(

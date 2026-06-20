@@ -641,6 +641,78 @@ export async function getPulseMasterData(): Promise<PulseCache> {
   };
 }
 
+export async function createPulseStrategicTrack(data: InsertStrategicTrack) {
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const row = {
+      id: nextPulseId(),
+      key: data.key,
+      nameAr: data.nameAr,
+      descriptionAr: data.descriptionAr ?? null,
+      color: data.color ?? "#1b2a5e",
+      icon: data.icon ?? "Circle",
+      sortOrder: data.sortOrder ?? cache.tracks.length + 1,
+      isActive: data.isActive ?? true,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    cache.tracks.push(row);
+    return row.id;
+  }
+  const result = await db.insert(strategicTracks).values(data).$returningId();
+  return result[0]?.id as number;
+}
+
+export async function updatePulseStrategicTrack(id: number, patch: Partial<InsertStrategicTrack>) {
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const track = cache.tracks.find((item) => item.id === id);
+    if (track) Object.assign(track, patch, { updatedAt: now() });
+    return;
+  }
+  await db.update(strategicTracks).set(patch).where(eq(strategicTracks.id, id));
+}
+
+export async function createPulseStrategicGoal(data: InsertStrategicGoal) {
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const row = {
+      id: nextPulseId(),
+      key: data.key,
+      trackId: data.trackId ?? null,
+      nameAr: data.nameAr,
+      descriptionAr: data.descriptionAr ?? null,
+      targetValue: data.targetValue ?? 0,
+      targetUnit: data.targetUnit ?? "عدد",
+      periodType: data.periodType ?? "yearly",
+      startDate: data.startDate ?? null,
+      endDate: data.endDate ?? null,
+      sortOrder: data.sortOrder ?? cache.goals.length + 1,
+      isActive: data.isActive ?? true,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    cache.goals.push(row);
+    return row.id;
+  }
+  const result = await db.insert(strategicGoals).values(data).$returningId();
+  return result[0]?.id as number;
+}
+
+export async function updatePulseStrategicGoal(id: number, patch: Partial<InsertStrategicGoal>) {
+  const db = await getDb();
+  if (!db) {
+    const cache = getPulseCache();
+    const goal = cache.goals.find((item) => item.id === id);
+    if (goal) Object.assign(goal, patch, { updatedAt: now() });
+    return;
+  }
+  await db.update(strategicGoals).set(patch).where(eq(strategicGoals.id, id));
+}
+
 export async function createPulseEntity(data: InsertEntity) {
   const db = await getDb();
   if (!db) {
@@ -882,6 +954,13 @@ export async function getPulseDashboard(reportId?: number) {
     valuesWithKeys
   );
   const evidence = reportId ? await getPulseEvidence(reportId) : await getPulseEvidence();
+  const entitiesWithValues = new Set(reportValues.map((value) => value.entityId));
+  const missingSubmissions = reportId
+    ? master.entities.filter(
+        (entity: typeof master.entities[number]) =>
+          entity.status === "active" && entity.isActive && !entitiesWithValues.has(entity.id)
+      )
+    : [];
   return {
     totals: {
       ...totals,
@@ -894,6 +973,8 @@ export async function getPulseDashboard(reportId?: number) {
     },
     goalProgress: progress,
     activeEntities: master.entities.filter((entity: typeof master.entities[number]) => entity.status === "active" && entity.isActive),
+    missingSubmissions,
+    donorReadyHighlights: evidence.filter((item) => item.isDonorFacing).slice(0, 6),
     evidence,
   };
 }

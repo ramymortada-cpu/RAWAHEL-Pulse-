@@ -138,6 +138,61 @@ export default function Dashboard() {
           </div>
         )}
 
+        {pulseDashboard && (
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+              <h2 className="text-lg font-bold text-[#1b2a5e]">تقدم الأهداف الاستراتيجية</h2>
+              <div className="mt-4 space-y-3">
+                {pulseDashboard.goalProgress.slice(0, 6).map((goal) => (
+                  <button
+                    key={goal.goalId}
+                    onClick={() => setLocation(`/goals/${goal.goalId}`)}
+                    className="w-full rounded-xl border border-border/60 p-3 text-right transition hover:bg-muted/40"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold text-foreground">{goal.nameAr}</span>
+                      <span className="text-sm font-extrabold text-[#2e7d6b]">{goal.progress}%</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-[#2e7d6b]" style={{ width: `${goal.progress}%` }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+              <h2 className="text-lg font-bold text-[#1b2a5e]">جاهزية التقرير</h2>
+              <div className="mt-4 rounded-xl bg-amber-50 p-4">
+                <div className="text-sm font-bold text-amber-800">إدخالات ناقصة</div>
+                <div className="mt-1 text-3xl font-extrabold text-amber-700">
+                  {pulseDashboard.missingSubmissions.length.toLocaleString("ar-EG")}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {pulseDashboard.missingSubmissions.slice(0, 6).map((entity) => (
+                    <span key={entity.id} className="rounded-full bg-white px-2 py-1 text-xs font-bold text-amber-800">
+                      {entity.nameAr}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl bg-emerald-50 p-4">
+                <div className="text-sm font-bold text-emerald-800">شواهد جاهزة للداعمين</div>
+                <div className="mt-1 text-3xl font-extrabold text-emerald-700">
+                  {pulseDashboard.donorReadyHighlights.length.toLocaleString("ar-EG")}
+                </div>
+                <div className="mt-3 space-y-1">
+                  {pulseDashboard.donorReadyHighlights.slice(0, 3).map((item) => (
+                    <div key={item.id} className="text-xs font-medium text-emerald-900">
+                      {item.titleAr}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
         {/* Recent reports */}
         <div className="mt-10">
           <div className="flex items-center justify-between mb-4">

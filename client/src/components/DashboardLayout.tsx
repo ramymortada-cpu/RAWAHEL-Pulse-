@@ -38,13 +38,13 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "لوحة المؤشرات", path: "/" },
-  { icon: Gauge, label: "نبض رواحل", path: "/pulse" },
+  { icon: LayoutDashboard, label: "لوحة النبض", path: "/" },
   { icon: FileBarChart, label: "التقارير", path: "/reports" },
-  { icon: Boxes, label: "نظرة عامة على العناصر", path: "/items" },
-  { icon: GitCompareArrows, label: "مقارنة الشهور", path: "/compare" },
-  { icon: History, label: "سجل التقارير", path: "/history" },
-  { icon: SheetIcon, label: "ربط Google Sheets", path: "/integrations" },
+  { icon: Boxes, label: "الكيانات التنفيذية", path: "/items" },
+  { icon: Gauge, label: "المسارات والأهداف", path: "/pulse" },
+  { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/compare" },
+  { icon: History, label: "تقارير الداعمين", path: "/history" },
+  { icon: SheetIcon, label: "الإعدادات", path: "/integrations" },
 ];
 
 export default function DashboardLayout({

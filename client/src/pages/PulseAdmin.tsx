@@ -42,11 +42,12 @@ type PulseEntity = {
   nameAr: string;
   type: EntityType;
   descriptionAr: string | null;
+  ownerName?: string | null;
   status: "active" | "paused" | "archived";
 };
 
-type PulseTrack = { id: number; nameAr: string };
-type PulseGoal = { id: number; nameAr: string };
+type PulseTrack = { id: number; key: string; nameAr: string; descriptionAr?: string | null; color?: string; icon?: string; sortOrder?: number };
+type PulseGoal = { id: number; key: string; trackId?: number | null; nameAr: string; descriptionAr?: string | null; targetValue?: number; targetUnit?: string; periodType?: "yearly" | "two_years" | "monthly" | "custom"; sortOrder?: number };
 type PulseMetric = { id: number; nameAr: string };
 
 function slugifyArabic(value: string) {
@@ -86,6 +87,22 @@ export default function PulseAdmin() {
     descriptionAr: "",
     type: "link" as "image" | "video" | "link" | "document" | "testimonial" | "story",
   });
+  const [trackForm, setTrackForm] = useState({
+    key: "",
+    nameAr: "",
+    descriptionAr: "",
+    color: "#1b2a5e",
+    icon: "Route",
+  });
+  const [goalForm, setGoalForm] = useState({
+    key: "",
+    trackId: "",
+    nameAr: "",
+    descriptionAr: "",
+    targetValue: "",
+    targetUnit: "عدد",
+    periodType: "yearly" as "yearly" | "two_years" | "monthly" | "custom",
+  });
 
   const activeEntities = useMemo(
     () => ((master?.entities ?? []) as PulseEntity[]).filter((entity: PulseEntity) => entity.status !== "archived"),
@@ -120,6 +137,15 @@ export default function PulseAdmin() {
         trackIds: [],
         goalIds: [],
       });
+      utils.pulse.masterData.invalidate();
+      utils.pulse.dashboard.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const updateEntity = trpc.pulse.updateEntity.useMutation({
+    onSuccess: () => {
+      toast.success("تم تحديث الكيان وروابطه");
       utils.pulse.masterData.invalidate();
       utils.pulse.dashboard.invalidate();
     },
@@ -162,6 +188,38 @@ export default function PulseAdmin() {
     },
     onError: (error) => toast.error(error.message),
   });
+
+  const createTrack = trpc.pulse.createTrack.useMutation({
+    onSuccess: () => {
+      toast.success("تم إنشاء المسار الاستراتيجي");
+      setTrackForm({ key: "", nameAr: "", descriptionAr: "", color: "#1b2a5e", icon: "Route" });
+      utils.pulse.masterData.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const createGoal = trpc.pulse.createGoal.useMutation({
+    onSuccess: () => {
+      toast.success("تم إنشاء الهدف الاستراتيجي");
+      setGoalForm({ key: "", trackId: "", nameAr: "", descriptionAr: "", targetValue: "", targetUnit: "عدد", periodType: "yearly" });
+      utils.pulse.masterData.invalidate();
+      utils.pulse.dashboard.invalidate();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const loadSelectedEntityForEdit = () => {
+    if (!selectedEntity || !master) return;
+    setEntityForm({
+      nameAr: selectedEntity.nameAr,
+      key: selectedEntity.key,
+      type: selectedEntity.type,
+      descriptionAr: selectedEntity.descriptionAr ?? "",
+      ownerName: selectedEntity.ownerName ?? "",
+      trackIds: master.entityTrackLinks.filter((link) => link.entityId === selectedEntity.id).map((link) => link.trackId),
+      goalIds: master.entityGoalLinks.filter((link) => link.entityId === selectedEntity.id).map((link) => link.goalId),
+    });
+  };
 
   const toggleId = (ids: number[], id: number) =>
     ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
@@ -207,6 +265,138 @@ export default function PulseAdmin() {
           <PulseStat label="الأنشطة المنفذة" value={dashboard?.totals.totalActivities ?? 0} icon={<BookOpen />} />
           <PulseStat label="شواهد الأثر" value={dashboard?.totals.totalEvidenceAssets ?? 0} icon={<ImagePlus />} />
           <PulseStat label="نسبة تحقيق الأهداف" value={dashboard?.totals.goalAchievementRate ?? 0} suffix="%" icon={<Target />} />
+        </section>
+
+        <section className="mt-8 grid gap-6 xl:grid-cols-2">
+          <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-extrabold text-[#1b2a5e]">المسارات الاستراتيجية</h2>
+            <p className="mt-1 text-sm text-slate-500">أضف مسارًا جديدًا أو راجع المسارات الحالية.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="اسم المسار"
+                value={trackForm.nameAr}
+                onChange={(event) =>
+                  setTrackForm((form) => ({
+                    ...form,
+                    nameAr: event.target.value,
+                    key: form.key || slugifyArabic(event.target.value),
+                  }))
+                }
+              />
+              <Input
+                placeholder="track_key"
+                dir="ltr"
+                value={trackForm.key}
+                onChange={(event) => setTrackForm((form) => ({ ...form, key: event.target.value }))}
+              />
+              <Input
+                placeholder="لون المسار"
+                dir="ltr"
+                value={trackForm.color}
+                onChange={(event) => setTrackForm((form) => ({ ...form, color: event.target.value }))}
+              />
+              <Input
+                placeholder="Icon"
+                dir="ltr"
+                value={trackForm.icon}
+                onChange={(event) => setTrackForm((form) => ({ ...form, icon: event.target.value }))}
+              />
+              <Textarea
+                className="md:col-span-2"
+                placeholder="وصف المسار"
+                value={trackForm.descriptionAr}
+                onChange={(event) => setTrackForm((form) => ({ ...form, descriptionAr: event.target.value }))}
+              />
+            </div>
+            <Button
+              className="mt-4 bg-[#1b2a5e] hover:bg-[#2c3f7a]"
+              disabled={!trackForm.nameAr || !trackForm.key || createTrack.isPending}
+              onClick={() => createTrack.mutate(trackForm)}
+            >
+              <Plus className="ml-2 h-4 w-4" />
+              إضافة مسار
+            </Button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {((master?.tracks ?? []) as PulseTrack[]).map((track) => (
+                <Badge key={track.id} variant="secondary">{track.nameAr}</Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-extrabold text-[#1b2a5e]">الأهداف الاستراتيجية</h2>
+            <p className="mt-1 text-sm text-slate-500">أضف هدفًا قابلًا للقياس واربطه بمسار.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="اسم الهدف"
+                value={goalForm.nameAr}
+                onChange={(event) =>
+                  setGoalForm((form) => ({
+                    ...form,
+                    nameAr: event.target.value,
+                    key: form.key || slugifyArabic(event.target.value),
+                  }))
+                }
+              />
+              <Input
+                placeholder="goal_key"
+                dir="ltr"
+                value={goalForm.key}
+                onChange={(event) => setGoalForm((form) => ({ ...form, key: event.target.value }))}
+              />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={goalForm.trackId}
+                onChange={(event) => setGoalForm((form) => ({ ...form, trackId: event.target.value }))}
+              >
+                <option value="">بدون مسار</option>
+                {((master?.tracks ?? []) as PulseTrack[]).map((track) => (
+                  <option key={track.id} value={track.id}>{track.nameAr}</option>
+                ))}
+              </select>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={goalForm.periodType}
+                onChange={(event) => setGoalForm((form) => ({ ...form, periodType: event.target.value as typeof goalForm.periodType }))}
+              >
+                <option value="yearly">سنوي</option>
+                <option value="two_years">عامان</option>
+                <option value="monthly">شهري</option>
+                <option value="custom">مخصص</option>
+              </select>
+              <Input
+                placeholder="المستهدف"
+                type="number"
+                value={goalForm.targetValue}
+                onChange={(event) => setGoalForm((form) => ({ ...form, targetValue: event.target.value }))}
+              />
+              <Input
+                placeholder="وحدة القياس"
+                value={goalForm.targetUnit}
+                onChange={(event) => setGoalForm((form) => ({ ...form, targetUnit: event.target.value }))}
+              />
+              <Textarea
+                className="md:col-span-2"
+                placeholder="وصف الهدف"
+                value={goalForm.descriptionAr}
+                onChange={(event) => setGoalForm((form) => ({ ...form, descriptionAr: event.target.value }))}
+              />
+            </div>
+            <Button
+              className="mt-4 bg-[#2e7d6b] hover:bg-[#256a5b]"
+              disabled={!goalForm.nameAr || !goalForm.key || createGoal.isPending}
+              onClick={() =>
+                createGoal.mutate({
+                  ...goalForm,
+                  trackId: goalForm.trackId ? Number(goalForm.trackId) : null,
+                  targetValue: Number(goalForm.targetValue || 0),
+                })
+              }
+            >
+              <Plus className="ml-2 h-4 w-4" />
+              إضافة هدف
+            </Button>
+          </div>
         </section>
 
         <section className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -287,6 +477,33 @@ export default function PulseAdmin() {
             >
               <Plus className="ml-2 h-4 w-4" />
               إضافة كيان
+            </Button>
+            <Button
+              className="mt-5 mr-2"
+              variant="outline"
+              disabled={!selectedEntity}
+              onClick={loadSelectedEntityForEdit}
+            >
+              تحميل المحدد للتعديل
+            </Button>
+            <Button
+              className="mt-5 mr-2 bg-[#2e7d6b] hover:bg-[#256a5b]"
+              disabled={!selectedEntity || !entityForm.nameAr || !entityForm.key || updateEntity.isPending}
+              onClick={() =>
+                selectedEntity &&
+                updateEntity.mutate({
+                  id: selectedEntity.id,
+                  nameAr: entityForm.nameAr,
+                  type: entityForm.type,
+                  descriptionAr: entityForm.descriptionAr,
+                  ownerName: entityForm.ownerName,
+                  trackIds: entityForm.trackIds,
+                  goalIds: entityForm.goalIds,
+                })
+              }
+            >
+              <Save className="ml-2 h-4 w-4" />
+              حفظ تعديلات الكيان
             </Button>
 
             <div className="mt-6 grid max-h-[520px] gap-2 overflow-auto pr-1">
