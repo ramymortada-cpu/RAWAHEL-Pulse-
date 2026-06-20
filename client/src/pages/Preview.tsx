@@ -152,9 +152,9 @@ export default function Preview() {
         <div className="flex items-center gap-2">
           <div className="hidden md:flex rounded-lg border border-white/20 bg-white/10 p-1">
             {[
-              { key: "monthly", label: "Monthly" },
-              { key: "donor", label: "Donor" },
-              { key: "annual", label: "Annual" },
+              { key: "monthly", label: "التقرير الشهري" },
+              { key: "donor", label: "تقرير أثر الداعمين" },
+              { key: "annual", label: "التقرير الاستراتيجي" },
             ].map((template) => (
               <button
                 key={template.key}
@@ -194,6 +194,21 @@ export default function Preview() {
           </Button>
         </div>
       </div>
+
+      {pulseDashboard && (
+        <div className="border-b border-white/10 bg-[#16213e] px-6 py-2 text-xs text-white/80">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-3">
+            <span>القيم المعتمدة: {pulseDashboard.totals.approvedValueCount?.toLocaleString("ar-EG") ?? "٠"}</span>
+            <span>الشواهد المعتمدة: {pulseDashboard.totals.approvedEvidenceCount?.toLocaleString("ar-EG") ?? "٠"}</span>
+            <span>اكتمال البيانات: {pulseDashboard.totals.dataCompletenessScore?.toLocaleString("ar-EG") ?? "٠"}%</span>
+            {(pulseDashboard.totals.pendingSubmissionCount ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-400/20 px-3 py-1 text-amber-100">
+                يوجد {pulseDashboard.totals.pendingSubmissionCount.toLocaleString("ar-EG")} إدخالات مرسلة لم تُعتمد بعد، لذلك لم تدخل في هذا التقرير.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Infographic canvas */}
       <div className="flex justify-center py-8 px-4 overflow-x-auto">

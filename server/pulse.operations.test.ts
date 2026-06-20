@@ -115,6 +115,10 @@ describe("RAWAHEL Pulse operations", () => {
       progress: 45,
       linkedMetricDefinitionIds: [metricDefinitionId],
     });
+    expect(dashboard.goalProgress.find((goal) => goal.goalId === goalId)?.linkedMetricNames).toContain("مستفيدون اختباريون");
+    expect(dashboard.totals.approvedValueCount).toBeGreaterThanOrEqual(1);
+    expect(dashboard.totals.dataCompletenessScore).toBeGreaterThan(0);
+    expect(dashboard.entityHighlights.map((item) => item.entityId)).toContain(entityId);
     expect(dashboard.donorReadyHighlights.map((item) => item.titleAr)).toContain("قصة أثر اختبارية");
     expect(dashboard.missingSubmissions.some((entity) => entity.id === entityId)).toBe(false);
 
@@ -312,11 +316,48 @@ describe("RAWAHEL Pulse operations", () => {
     expect(review?.evidence.every((item) => item.entityId === entityAId && item.reportId === reportId)).toBe(true);
     const beforeApproval = await getPulseDashboard(reportId);
     expect(beforeApproval.goalProgress.find((goal) => goal.goalId === goalId)).toMatchObject({ actual: 0, progress: 0 });
+    expect(beforeApproval.donorReadyHighlights.map((item) => item.titleAr)).not.toContain("شاهد رابط نهائي");
 
     await approvePulseSubmission(link.id, 1);
+    await createPulseEvidence({
+      reportId,
+      entityId: entityAId,
+      goalId,
+      titleAr: "شاهد داخلي غير داعمي",
+      descriptionAr: "لا يظهر في تقرير الداعمين",
+      type: "story",
+      url: "https://example.com/internal-only",
+      fileKey: null,
+      isDonorFacing: false,
+      sortOrder: 2,
+    });
     const afterApproval = await getPulseDashboard(reportId);
     expect(afterApproval.goalProgress.find((goal) => goal.goalId === goalId)).toMatchObject({ actual: 40, progress: 40 });
+    expect(afterApproval.goalProgress.find((goal) => goal.goalId === goalId)?.linkedMetricNames).toContain("مستفيدون من الرابط");
     expect(afterApproval.donorReadyHighlights.map((item) => item.titleAr)).toContain("شاهد رابط نهائي");
+    expect(afterApproval.donorReadyHighlights.map((item) => item.titleAr)).not.toContain("شاهد داخلي غير داعمي");
+    expect(afterApproval.totals.approvedValueCount).toBeGreaterThanOrEqual(1);
+    expect(afterApproval.totals.approvedEvidenceCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reports zero completeness when a Pulse report has no approved entity data", async () => {
+    await seedPulseMasterData();
+    const reportId = await createReport({
+      ownerId: 1,
+      title: "تقرير بلا بيانات معتمدة",
+      year: 2026,
+      month: 9,
+      periodType: "monthly",
+      audience: "donor",
+      status: "draft",
+    });
+
+    const dashboard = await getPulseDashboard(reportId);
+
+    expect(dashboard.totals.approvedValueCount).toBe(0);
+    expect(dashboard.totals.approvedEvidenceCount).toBe(0);
+    expect(dashboard.totals.dataCompletenessScore).toBe(0);
+    expect(dashboard.donorReadyHighlights).toHaveLength(0);
   });
 
   it("rejects invalid, revoked, and expired external submission tokens", async () => {

@@ -1487,6 +1487,40 @@ export async function getPulseDashboard(reportId?: number) {
   const evidenceRows = reportId ? await getPulseEvidence(reportId) : await getPulseEvidence();
   const evidence = evidenceRows.filter((item) => item.submissionStatus === "approved");
   const entitiesWithValues = new Set(approvedReportValues.map((value) => value.entityId));
+  const activeEntities = master.entities.filter((entity: typeof master.entities[number]) => entity.status === "active" && entity.isActive);
+  const entityHighlights = activeEntities
+    .map((entity) => {
+      const entityValues = approvedReportValues.filter((value) => value.entityId === entity.id);
+      const donorValues = entityValues.filter((value) => donorMetricIds.has(value.metricDefinitionId));
+      const valueTotal = donorValues.reduce((sum, value) => sum + Number(value.valueNumber ?? 0), 0);
+      const metricNames = donorValues
+        .map((value) => master.metricDefinitions.find((metric) => metric.id === value.metricDefinitionId)?.nameAr)
+        .filter((name): name is string => Boolean(name));
+      const goalNames = master.entityGoalLinks
+        .filter((link) => link.entityId === entity.id)
+        .map((link) => master.goals.find((goal) => goal.id === link.goalId)?.nameAr)
+        .filter((name): name is string => Boolean(name));
+      const evidenceCount = evidence.filter((item) => item.entityId === entity.id && item.isDonorFacing).length;
+      return {
+        entityId: entity.id,
+        nameAr: entity.nameAr,
+        type: entity.type,
+        valueTotal,
+        metricNames: Array.from(new Set(metricNames)).slice(0, 3),
+        goalNames: Array.from(new Set(goalNames)).slice(0, 2),
+        evidenceCount,
+      };
+    })
+    .filter((item) => item.valueTotal > 0 || item.evidenceCount > 0)
+    .sort((a, b) => b.valueTotal - a.valueTotal || b.evidenceCount - a.evidenceCount)
+    .slice(0, 6);
+  const pendingSubmissionCount = reportId
+    ? (await listPulseSubmissionLinks()).filter(
+        (link) => link.reportId === reportId && ["submitted", "draft", "needs_revision", "opened", "created"].includes(link.status)
+      ).length
+    : 0;
+  const dataCompletenessScore =
+    activeEntities.length > 0 ? Math.round((entitiesWithValues.size / activeEntities.length) * 100) : 0;
   const missingSubmissions = reportId
     ? master.entities.filter(
         (entity: typeof master.entities[number]) =>
@@ -1498,6 +1532,10 @@ export async function getPulseDashboard(reportId?: number) {
       ...totals,
       totalEvidenceAssets: evidence.length,
       donorFacingEvidenceCount: evidence.filter((item) => item.isDonorFacing).length,
+      approvedValueCount: approvedReportValues.length,
+      approvedEvidenceCount: evidence.length,
+      pendingSubmissionCount,
+      dataCompletenessScore,
       donorFacing: {
         ...donorFacingTotals,
         totalEvidenceAssets: evidence.filter((item) => item.isDonorFacing).length,
@@ -1509,7 +1547,8 @@ export async function getPulseDashboard(reportId?: number) {
           : 0,
     },
     goalProgress: progress,
-    activeEntities: master.entities.filter((entity: typeof master.entities[number]) => entity.status === "active" && entity.isActive),
+    activeEntities,
+    entityHighlights,
     missingSubmissions,
     donorReadyHighlights: evidence.filter((item) => item.isDonorFacing).slice(0, 6),
     evidence,
