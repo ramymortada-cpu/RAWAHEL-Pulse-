@@ -122,3 +122,56 @@ pnpm check
 pnpm test
 pnpm build
 ```
+
+## Admin Workflow — Premium Product Finish
+
+### Add A New Initiative Or Entity
+
+1. Open `/pulse#entities`.
+2. Enter the Arabic entity name, stable key, type, owner, and short description.
+3. Select the strategic tracks and goals that this entity contributes to.
+4. Click **إضافة كيان**.
+5. The entity immediately appears in KPI entry and entity detail screens. If archived later, it is removed from new active reports while historical values remain available.
+
+### Link Strategic Goals To KPIs
+
+1. Open `/pulse#metrics`.
+2. Add any custom KPI needed for the selected entity.
+3. In **ربط الهدف بالمؤشرات**, choose the strategic goal.
+4. Select the KPI definitions that should calculate that goal.
+5. Click **حفظ مؤشرات الهدف**.
+
+Goal progress is intentionally explainable: RAWAHEL Pulse only calculates a strategic goal from explicitly linked KPI definitions in `goal_metric_links`. Unrelated metrics such as messages, hours, rates, or activities are not mixed into a goal unless selected.
+
+### Enter Monthly KPI Values
+
+1. Open `/pulse#values`.
+2. Choose the monthly report.
+3. Choose the entity.
+4. Review the linked strategic goals shown beside the form.
+5. Fill the KPI values for that entity only.
+6. Click **حفظ مؤشرات الشهر**.
+7. Use the missing-data warning to see whether visible KPIs still need values.
+
+### Add Donor-Facing Evidence
+
+1. Open `/pulse#evidence`.
+2. Choose the same report and entity used for KPI entry.
+3. Add a concise story title, evidence URL, and short Arabic description.
+4. Save it as donor-facing evidence so it appears in the donor report.
+
+### Create And Export A Donor Report
+
+1. Open `/reports`.
+2. Create or open the target report.
+3. Open **معاينة التقرير**.
+4. Choose the **Donor** template.
+5. Review the premium donor report sections:
+   - big impact numbers
+   - strategic goal progress
+   - active entity highlights
+   - donor-facing stories and evidence
+   - where support created impact
+6. Click **تصدير PDF** or **تصدير صورة PNG**.
+
+The export is browser-side and works locally. Remote upload/storage is optional and best-effort only.

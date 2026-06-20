@@ -129,9 +129,22 @@ export async function getUserByOpenId(openId: string) {
 
 /* ---------------------- Reports ---------------------- */
 
+type ReportRow = typeof reports.$inferSelect;
+type DepartmentDataRow = typeof departmentData.$inferSelect;
+type DepartmentItemRow = typeof departmentItems.$inferSelect;
+
+const localReports: ReportRow[] = [];
+const localDepartmentData: DepartmentDataRow[] = [];
+const localDepartmentItems: DepartmentItemRow[] = [];
+let localReportId = 1_000;
+
 export async function listReports(ownerId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    return localReports
+      .filter((report) => report.ownerId === ownerId)
+      .sort((a, b) => b.year - a.year || b.month - a.month || b.createdAt.getTime() - a.createdAt.getTime());
+  }
   return db
     .select()
     .from(reports)
@@ -141,7 +154,7 @@ export async function listReports(ownerId: number) {
 
 export async function getReport(ownerId: number, id: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) return localReports.find((report) => report.id === id && report.ownerId === ownerId);
   const rows = await db
     .select()
     .from(reports)
@@ -152,7 +165,11 @@ export async function getReport(ownerId: number, id: number) {
 
 export async function findReportByPeriod(ownerId: number, year: number, month: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) {
+    return localReports.find(
+      (report) => report.ownerId === ownerId && report.year === year && report.month === month
+    );
+  }
   const rows = await db
     .select()
     .from(reports)
@@ -165,7 +182,27 @@ export async function findReportByPeriod(ownerId: number, year: number, month: n
 
 export async function createReport(data: InsertReport) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const createdAt = now();
+    const row: ReportRow = {
+      id: localReportId++,
+      ownerId: data.ownerId,
+      title: data.title,
+      year: data.year,
+      month: data.month,
+      periodType: data.periodType ?? "monthly",
+      audience: data.audience ?? "internal",
+      status: data.status ?? "draft",
+      summary: data.summary ?? null,
+      pdfKey: data.pdfKey ?? null,
+      pdfUrl: data.pdfUrl ?? null,
+      generatedAt: data.generatedAt ?? null,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    localReports.push(row);
+    return row.id;
+  }
   const result = await db.insert(reports).values(data).$returningId();
   return result[0]?.id as number;
 }
@@ -176,7 +213,11 @@ export async function updateReport(
   patch: Partial<InsertReport>
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const report = localReports.find((item) => item.id === id && item.ownerId === ownerId);
+    if (report) Object.assign(report, patch, { updatedAt: now() });
+    return;
+  }
   await db
     .update(reports)
     .set(patch)
@@ -185,7 +226,17 @@ export async function updateReport(
 
 export async function deleteReport(ownerId: number, id: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const reportIndex = localReports.findIndex((report) => report.id === id && report.ownerId === ownerId);
+    if (reportIndex >= 0) localReports.splice(reportIndex, 1);
+    for (let i = localDepartmentItems.length - 1; i >= 0; i--) {
+      if (localDepartmentItems[i].reportId === id) localDepartmentItems.splice(i, 1);
+    }
+    for (let i = localDepartmentData.length - 1; i >= 0; i--) {
+      if (localDepartmentData[i].reportId === id) localDepartmentData.splice(i, 1);
+    }
+    return;
+  }
   await db.delete(departmentItems).where(eq(departmentItems.reportId, id));
   await db.delete(departmentData).where(eq(departmentData.reportId, id));
   await db.delete(reports).where(and(eq(reports.id, id), eq(reports.ownerId, ownerId)));
@@ -195,7 +246,11 @@ export async function deleteReport(ownerId: number, id: number) {
 
 export async function getItemsByReport(reportId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    return localDepartmentItems
+      .filter((item) => item.reportId === reportId)
+      .sort((a, b) => a.departmentKey.localeCompare(b.departmentKey) || a.sortOrder - b.sortOrder);
+  }
   return db
     .select()
     .from(departmentItems)
@@ -205,7 +260,41 @@ export async function getItemsByReport(reportId: number) {
 
 export async function upsertItem(data: InsertDepartmentItem) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const existing = localDepartmentItems.find(
+      (item) =>
+        item.reportId === data.reportId &&
+        item.departmentKey === data.departmentKey &&
+        item.itemKey === data.itemKey
+    );
+    if (existing) {
+      Object.assign(existing, {
+        itemNameAr: data.itemNameAr,
+        itemType: data.itemType,
+        metrics: data.metrics ?? null,
+        notes: data.notes ?? null,
+        sortOrder: data.sortOrder ?? 0,
+        updatedAt: now(),
+      });
+      return existing.id;
+    }
+    const createdAt = now();
+    const row: DepartmentItemRow = {
+      id: nextPulseId(),
+      reportId: data.reportId,
+      departmentKey: data.departmentKey,
+      itemKey: data.itemKey,
+      itemNameAr: data.itemNameAr,
+      itemType: data.itemType,
+      metrics: data.metrics ?? null,
+      notes: data.notes ?? null,
+      sortOrder: data.sortOrder ?? 0,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    localDepartmentItems.push(row);
+    return row.id;
+  }
   const existing = await db
     .select()
     .from(departmentItems)
@@ -242,7 +331,15 @@ export async function reorderItems(
   orderedItemKeys: string[]
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    orderedItemKeys.forEach((itemKey, index) => {
+      const item = localDepartmentItems.find(
+        (row) => row.reportId === reportId && row.departmentKey === departmentKey && row.itemKey === itemKey
+      );
+      if (item) Object.assign(item, { sortOrder: index + 1, updatedAt: now() });
+    });
+    return;
+  }
   for (let i = 0; i < orderedItemKeys.length; i++) {
     await db
       .update(departmentItems)
@@ -259,7 +356,13 @@ export async function reorderItems(
 
 export async function deleteItem(reportId: number, departmentKey: string, itemKey: string) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const index = localDepartmentItems.findIndex(
+      (item) => item.reportId === reportId && item.departmentKey === departmentKey && item.itemKey === itemKey
+    );
+    if (index >= 0) localDepartmentItems.splice(index, 1);
+    return;
+  }
   await db
     .delete(departmentItems)
     .where(
@@ -275,13 +378,39 @@ export async function deleteItem(reportId: number, departmentKey: string, itemKe
 
 export async function getDepartmentData(reportId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) return localDepartmentData.filter((row) => row.reportId === reportId);
   return db.select().from(departmentData).where(eq(departmentData.reportId, reportId));
 }
 
 export async function upsertDepartmentData(data: InsertDepartmentData) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    const existing = localDepartmentData.find(
+      (row) => row.reportId === data.reportId && row.departmentKey === data.departmentKey
+    );
+    if (existing) {
+      Object.assign(existing, {
+        metrics: data.metrics ?? null,
+        achievements: data.achievements ?? null,
+        notes: data.notes ?? null,
+        updatedAt: now(),
+      });
+      return existing.id;
+    }
+    const createdAt = now();
+    const row: DepartmentDataRow = {
+      id: nextPulseId(),
+      reportId: data.reportId,
+      departmentKey: data.departmentKey,
+      metrics: data.metrics ?? null,
+      achievements: data.achievements ?? null,
+      notes: data.notes ?? null,
+      createdAt,
+      updatedAt: createdAt,
+    };
+    localDepartmentData.push(row);
+    return row.id;
+  }
   const existing = await db
     .select()
     .from(departmentData)

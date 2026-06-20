@@ -17,6 +17,8 @@ import {
   Plus,
   Save,
   Target,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -142,7 +144,6 @@ export default function PulseAdmin() {
     { reportId: selectedReportId ?? undefined },
     { enabled: true }
   );
-
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (!hash) return;
@@ -276,6 +277,16 @@ export default function PulseAdmin() {
         value.entityId === selectedEntity?.id &&
         value.metricDefinitionId === metricDefinitionId
     )?.valueNumber;
+  const visibleEntityMetrics = ((entityMetrics ?? []) as PulseMetric[]).slice(0, 12);
+  const enteredMetricCount = visibleEntityMetrics.filter(
+    (metric) => metricValues[metric.id] !== "" && metricValues[metric.id] !== undefined
+  ).length;
+  const missingMetricCount = selectedReportId
+    ? visibleEntityMetrics.filter(
+        (metric) => existingValue(metric.id) === undefined && !metricValues[metric.id]
+      ).length
+    : 0;
+  const hasMetricValues = Object.values(metricValues).some((value) => value !== "");
 
   if (isLoading) {
     return (
@@ -754,44 +765,72 @@ export default function PulseAdmin() {
                 </select>
               </div>
 
-              <div className="mt-4 rounded-2xl bg-[#f7f2e7] p-4">
-                <div className="text-sm font-extrabold text-[#1b2a5e]">الأهداف التي تغذيها هذه القيم</div>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedEntityGoals.length > 0 ? (
-                    selectedEntityGoals.map((goal) => (
-                      <Badge key={goal.id} className="bg-white text-[#1b2a5e] hover:bg-white">
-                        {goal.nameAr}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500">لا توجد أهداف مرتبطة بهذا الكيان بعد.</span>
+              <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_220px]">
+                <div className="rounded-2xl bg-[#f7f2e7] p-4">
+                  <div className="text-sm font-extrabold text-[#1b2a5e]">الأهداف التي تغذيها هذه القيم</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedEntityGoals.length > 0 ? (
+                      selectedEntityGoals.map((goal) => (
+                        <Badge key={goal.id} className="bg-white text-[#1b2a5e] hover:bg-white">
+                          {goal.nameAr}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-500">لا توجد أهداف مرتبطة بهذا الكيان بعد.</span>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-amber-800">
+                    {missingMetricCount > 0 ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                    حالة الإدخال
+                  </div>
+                  <div className="mt-2 text-xs leading-6 text-amber-900">
+                    {selectedReportId
+                      ? missingMetricCount > 0
+                        ? `متبقي ${missingMetricCount.toLocaleString("ar-EG")} مؤشر بدون قيمة.`
+                        : "كل المؤشرات الظاهرة لديها قيم أو تم تجهيزها للحفظ."
+                      : "اختر التقرير أولًا لعرض حالة النقص."}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-sm font-extrabold text-[#1b2a5e]">مؤشرات {selectedEntity?.nameAr ?? "الكيان"}</div>
+                  <Badge variant="secondary">
+                    {enteredMetricCount.toLocaleString("ar-EG")} جاهزة للحفظ
+                  </Badge>
+                </div>
+                <div className="grid gap-3">
+                  {visibleEntityMetrics.map((metric: PulseMetric) => (
+                    <label key={metric.id} className="grid gap-2 rounded-xl bg-white p-3 md:grid-cols-[1fr_160px] md:items-center">
+                      <span className="text-sm font-bold text-slate-700">{metric.nameAr}</span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder={String(existingValue(metric.id) ?? "0")}
+                        value={metricValues[metric.id] ?? ""}
+                        onChange={(event) =>
+                          setMetricValues((values) => ({
+                            ...values,
+                            [metric.id]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ))}
+                  {visibleEntityMetrics.length === 0 && (
+                    <div className="rounded-xl bg-white p-4 text-sm text-slate-500">
+                      لا توجد مؤشرات لهذا الكيان بعد. أضف KPI من قسم المؤشرات أولًا.
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-3">
-                {((entityMetrics ?? []) as PulseMetric[]).slice(0, 12).map((metric: PulseMetric) => (
-                  <label key={metric.id} className="grid gap-1 md:grid-cols-[1fr_160px] md:items-center">
-                    <span className="text-sm font-medium text-slate-700">{metric.nameAr}</span>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder={String(existingValue(metric.id) ?? "0")}
-                      value={metricValues[metric.id] ?? ""}
-                      onChange={(event) =>
-                        setMetricValues((values) => ({
-                          ...values,
-                          [metric.id]: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-
               <Button
                 className="mt-5 bg-[#1b2a5e] hover:bg-[#2c3f7a]"
-                disabled={!selectedReportId || !selectedEntity}
+                disabled={!selectedReportId || !selectedEntity || !hasMetricValues}
                 onClick={() =>
                   saveMetricValues.mutate({
                     reportId: selectedReportId as number,

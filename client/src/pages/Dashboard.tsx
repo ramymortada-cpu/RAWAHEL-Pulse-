@@ -14,6 +14,9 @@ import {
   Plus,
   FileText,
   ArrowLeft,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMemo } from "react";
@@ -88,9 +91,21 @@ export default function Dashboard() {
 
       <div className="px-6 py-8 md:px-10 max-w-7xl mx-auto">
         {/* KPI grid */}
-        <h2 className="text-lg font-bold text-foreground mb-4">
-          مؤشرات {PULSE_TERMS.impact}
-        </h2>
+        <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-[#1b2a5e]">
+              مؤشرات {PULSE_TERMS.impact}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              أرقام تنفيذية مختصرة من أحدث تقرير، مصممة للمراجعة السريعة قبل التصدير.
+            </p>
+          </div>
+          {latest && (
+            <div className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#1b2a5e] shadow-sm">
+              {monthName(latest.month)} {latest.year}
+            </div>
+          )}
+        </div>
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -140,21 +155,34 @@ export default function Dashboard() {
 
         {pulseDashboard && (
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-[#1b2a5e]">تقدم الأهداف الاستراتيجية</h2>
+            <section className="rounded-2xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-extrabold text-[#1b2a5e]">تقدم الأهداف الاستراتيجية</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    كل نسبة محسوبة فقط من KPIs المرتبطة صراحة بالهدف.
+                  </p>
+                </div>
+                <Target className="h-6 w-6 text-[#d4a843]" />
+              </div>
               <div className="mt-4 space-y-3">
                 {pulseDashboard.goalProgress.slice(0, 6).map((goal) => (
                   <button
                     key={goal.goalId}
                     onClick={() => setLocation(`/goals/${goal.goalId}`)}
-                    className="w-full rounded-xl border border-border/60 p-3 text-right transition hover:bg-muted/40"
+                    className="w-full rounded-2xl border border-[#1b2a5e]/10 bg-[#fbfaf7] p-4 text-right transition hover:border-[#d4a843]/60 hover:bg-[#fff8e4]"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-bold text-foreground">{goal.nameAr}</span>
-                      <span className="text-sm font-extrabold text-[#2e7d6b]">{goal.progress}%</span>
+                      <span className="rounded-full bg-white px-3 py-1 text-sm font-extrabold text-[#2e7d6b] shadow-sm">
+                        {goal.progress}%
+                      </span>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-[#2e7d6b]" style={{ width: `${goal.progress}%` }} />
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-l from-[#2e7d6b] to-[#d4a843]"
+                        style={{ width: `${goal.progress}%` }}
+                      />
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground">
                       يُحسب من: {goal.linkedMetricNames.length > 0 ? goal.linkedMetricNames.join("، ") : "لم يتم ربط مؤشرات بعد"}
@@ -164,33 +192,55 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-[#1b2a5e]">جاهزية التقرير</h2>
+            <section className="rounded-2xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-extrabold text-[#1b2a5e]">جاهزية التقرير</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">حالة الإدخال وشواهد الداعمين قبل التصدير.</p>
+                </div>
+                <Sparkles className="h-6 w-6 text-[#d4a843]" />
+              </div>
               <div className="mt-4 rounded-xl bg-amber-50 p-4">
-                <div className="text-sm font-bold text-amber-800">إدخالات ناقصة</div>
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-800">
+                  <AlertTriangle className="h-4 w-4" />
+                  إدخالات ناقصة
+                </div>
                 <div className="mt-1 text-3xl font-extrabold text-amber-700">
                   {pulseDashboard.missingSubmissions.length.toLocaleString("ar-EG")}
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {pulseDashboard.missingSubmissions.slice(0, 6).map((entity) => (
-                    <span key={entity.id} className="rounded-full bg-white px-2 py-1 text-xs font-bold text-amber-800">
-                      {entity.nameAr}
-                    </span>
-                  ))}
-                </div>
+                {pulseDashboard.missingSubmissions.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {pulseDashboard.missingSubmissions.slice(0, 6).map((entity) => (
+                      <span key={entity.id} className="rounded-full bg-white px-2 py-1 text-xs font-bold text-amber-800">
+                        {entity.nameAr}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-xs font-medium text-amber-800">كل الكيانات النشطة لديها إدخالات لهذا التقرير.</div>
+                )}
               </div>
               <div className="mt-4 rounded-xl bg-emerald-50 p-4">
-                <div className="text-sm font-bold text-emerald-800">شواهد جاهزة للداعمين</div>
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                  <CheckCircle2 className="h-4 w-4" />
+                  شواهد جاهزة للداعمين
+                </div>
                 <div className="mt-1 text-3xl font-extrabold text-emerald-700">
                   {pulseDashboard.donorReadyHighlights.length.toLocaleString("ar-EG")}
                 </div>
-                <div className="mt-3 space-y-1">
-                  {pulseDashboard.donorReadyHighlights.slice(0, 3).map((item) => (
-                    <div key={item.id} className="text-xs font-medium text-emerald-900">
-                      {item.titleAr}
-                    </div>
-                  ))}
-                </div>
+                {pulseDashboard.donorReadyHighlights.length > 0 ? (
+                  <div className="mt-3 space-y-1">
+                    {pulseDashboard.donorReadyHighlights.slice(0, 3).map((item) => (
+                      <div key={item.id} className="text-xs font-medium text-emerald-900">
+                        {item.titleAr}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2 text-xs font-medium text-emerald-900">
+                    أضف قصة أو شاهد أثر من صفحة إدخال المؤشرات ليظهر هنا.
+                  </div>
+                )}
               </div>
             </section>
           </div>
@@ -217,10 +267,13 @@ export default function Dashboard() {
               ))}
             </div>
           ) : !reports || reports.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-card/60 p-12 text-center">
+            <div className="rounded-2xl border border-dashed border-[#d4a843]/60 bg-white p-12 text-center shadow-sm">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-              <p className="text-muted-foreground font-medium">
+              <p className="font-extrabold text-[#1b2a5e]">
                 لا توجد تقارير بعد
+              </p>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                أنشئ أول تقرير شهري، ثم أدخل مؤشرات الكيانات وشواهد الأثر لتصدير تقرير داعمين جاهز.
               </p>
               <Button
                 onClick={() => setLocation("/reports")}

@@ -337,7 +337,8 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
                 </div>
 
                 <div style={{ backgroundColor: "#f7f8fb", borderRadius: 14, padding: 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: "#1b2a5e", marginBottom: 10 }}>كيانات نشطة في الأثر</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: "#1b2a5e", marginBottom: 4 }}>أين صنع الدعم أثرًا</div>
+                  <div style={{ fontSize: 10.5, color: "#6b7280", marginBottom: 10, lineHeight: 1.5 }}>كيانات ومبادرات ظهرت في أثر هذا التقرير.</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                     {donorEntities.map((entity) => (
                       <span key={entity.id} style={{ border: "1px solid #e5e7eb", borderRadius: 999, backgroundColor: "#ffffff", padding: "6px 9px", fontSize: 10.5, fontWeight: 800, color: "#1b2a5e" }}>
