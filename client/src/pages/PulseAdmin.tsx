@@ -18,7 +18,7 @@ import {
   Save,
   Target,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -120,6 +120,15 @@ export default function PulseAdmin() {
   );
   const selectedEntity =
     activeEntities.find((entity: PulseEntity) => entity.id === selectedEntityId) ?? activeEntities[0];
+  const selectedEntityGoals = useMemo(() => {
+    if (!selectedEntity || !master) return [];
+    const goalIds = new Set(
+      master.entityGoalLinks
+        .filter((link) => link.entityId === selectedEntity.id)
+        .map((link) => link.goalId)
+    );
+    return ((master.goals ?? []) as PulseGoal[]).filter((goal) => goalIds.has(goal.id));
+  }, [master, selectedEntity]);
 
   const { data: entityMetrics } = trpc.pulse.metricsForEntity.useQuery(
     { entityId: selectedEntity?.id ?? 0 },
@@ -133,6 +142,15 @@ export default function PulseAdmin() {
     { reportId: selectedReportId ?? undefined },
     { enabled: true }
   );
+
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) return;
+    document.getElementById(`pulse-${hash}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, []);
 
   const createEntity = trpc.pulse.createEntity.useMutation({
     onSuccess: ({ id }) => {
@@ -301,7 +319,11 @@ export default function PulseAdmin() {
               key={tab.id}
               type="button"
               className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-[#1b2a5e] transition hover:bg-[#f7f2e7]"
-              onClick={() => document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              onClick={() => {
+                const shortHash = tab.id.replace("pulse-", "");
+                window.history.replaceState(null, "", `/pulse#${shortHash}`);
+                document.getElementById(tab.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
             >
               {tab.label}
             </button>
@@ -364,7 +386,7 @@ export default function PulseAdmin() {
             </div>
           </div>
 
-          <div id="pulse-entities" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+          <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-extrabold text-[#1b2a5e]">الأهداف الاستراتيجية</h2>
             <p className="mt-1 text-sm text-slate-500">أضف هدفًا قابلًا للقياس واربطه بمسار.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -437,61 +459,11 @@ export default function PulseAdmin() {
               <Plus className="ml-2 h-4 w-4" />
               إضافة هدف
             </Button>
-
-            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-              <h3 className="font-extrabold text-[#1b2a5e]">ربط الهدف بالمؤشرات</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                تقدم الهدف سيُحسب من هذه المؤشرات فقط، ولن يخلط رسائل أو ساعات أو نسب غير مرتبطة.
-              </p>
-              <select
-                className="mt-3 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={selectedGoalId ?? ""}
-                onChange={(event) => loadGoalMetrics(Number(event.target.value))}
-              >
-                <option value="">اختر هدفًا</option>
-                {((master?.goals ?? []) as PulseGoal[]).map((goal) => (
-                  <option key={goal.id} value={goal.id}>{goal.nameAr}</option>
-                ))}
-              </select>
-              <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-xl bg-white p-3">
-                {(master?.metricDefinitions ?? []).filter((metric) => metric.isActive).map((metric) => (
-                  <button
-                    key={metric.id}
-                    type="button"
-                    onClick={() => setGoalMetricIds((ids) => toggleId(ids, metric.id))}
-                    className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
-                      goalMetricIds.includes(metric.id)
-                        ? "border-[#d4a843] bg-[#fff8e4] text-[#1b2a5e]"
-                        : "border-slate-200 bg-white text-slate-600"
-                    }`}
-                  >
-                    {metric.nameAr}
-                  </button>
-                ))}
-              </div>
-              <Button
-                className="mt-3"
-                variant="outline"
-                disabled={!selectedGoalId || linkGoalMetrics.isPending}
-                onClick={() =>
-                  selectedGoalId &&
-                  linkGoalMetrics.mutate({
-                    goalId: selectedGoalId,
-                    links: goalMetricIds.map((metricDefinitionId) => ({
-                      metricDefinitionId,
-                      contributionType: "sum" as const,
-                    })),
-                  })
-                }
-              >
-                حفظ مؤشرات الهدف
-              </Button>
-            </div>
           </div>
         </section>
 
         <section className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
+          <div id="pulse-entities" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-extrabold text-[#1b2a5e]">
@@ -697,12 +669,65 @@ export default function PulseAdmin() {
                 <BadgeCheck className="ml-2 h-4 w-4" />
                 إضافة KPI للكيان المحدد
               </Button>
+
+              <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+                <h3 className="font-extrabold text-[#1b2a5e]">ربط الهدف بالمؤشرات</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  تقدم الهدف سيُحسب من هذه المؤشرات فقط، ولن يخلط رسائل أو ساعات أو نسب غير مرتبطة.
+                </p>
+                <select
+                  className="mt-3 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={selectedGoalId ?? ""}
+                  onChange={(event) => loadGoalMetrics(Number(event.target.value))}
+                >
+                  <option value="">اختر هدفًا</option>
+                  {((master?.goals ?? []) as PulseGoal[]).map((goal) => (
+                    <option key={goal.id} value={goal.id}>{goal.nameAr}</option>
+                  ))}
+                </select>
+                <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto rounded-xl bg-white p-3">
+                  {(master?.metricDefinitions ?? []).filter((metric) => metric.isActive).map((metric) => (
+                    <button
+                      key={metric.id}
+                      type="button"
+                      onClick={() => setGoalMetricIds((ids) => toggleId(ids, metric.id))}
+                      className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                        goalMetricIds.includes(metric.id)
+                          ? "border-[#d4a843] bg-[#fff8e4] text-[#1b2a5e]"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
+                    >
+                      {metric.nameAr}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  className="mt-3"
+                  variant="outline"
+                  disabled={!selectedGoalId || linkGoalMetrics.isPending}
+                  onClick={() =>
+                    selectedGoalId &&
+                    linkGoalMetrics.mutate({
+                      goalId: selectedGoalId,
+                      links: goalMetricIds.map((metricDefinitionId) => ({
+                        metricDefinitionId,
+                        contributionType: "sum" as const,
+                      })),
+                    })
+                  }
+                >
+                  حفظ مؤشرات الهدف
+                </Button>
+              </div>
             </div>
 
             <div id="pulse-values" className="scroll-mt-6 rounded-3xl border border-[#1b2a5e]/10 bg-white p-5 shadow-sm">
               <h2 className="text-xl font-extrabold text-[#1b2a5e]">
                 الإدخال الشهري
               </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                اختر التقرير، ثم الكيان، ثم أدخل مؤشرات هذا الكيان فقط واحفظ القيم.
+              </p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <select
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -727,6 +752,21 @@ export default function PulseAdmin() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-[#f7f2e7] p-4">
+                <div className="text-sm font-extrabold text-[#1b2a5e]">الأهداف التي تغذيها هذه القيم</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedEntityGoals.length > 0 ? (
+                    selectedEntityGoals.map((goal) => (
+                      <Badge key={goal.id} className="bg-white text-[#1b2a5e] hover:bg-white">
+                        {goal.nameAr}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-500">لا توجد أهداف مرتبطة بهذا الكيان بعد.</span>
+                  )}
+                </div>
               </div>
 
               <div className="mt-5 grid gap-3">

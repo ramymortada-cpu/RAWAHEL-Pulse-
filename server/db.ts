@@ -900,7 +900,9 @@ export async function getMetricsForEntity(entityId: number) {
   return master.metricDefinitions.filter(
     (metricDef: typeof master.metricDefinitions[number]) =>
       metricDef.isActive &&
-      (!metricDef.appliesToType || metricDef.appliesToType === entity.type || metricDef.entityId === entityId)
+      (metricDef.entityId === entityId ||
+        (!metricDef.entityId &&
+          (!metricDef.appliesToType || metricDef.appliesToType === entity.type)))
   );
 }
 

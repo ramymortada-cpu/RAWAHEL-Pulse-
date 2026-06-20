@@ -114,6 +114,12 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
       contentProduced: pulseTotals?.contentProduced ?? summary.contentProduced,
       goalAchievementRate: pulseTotals?.goalAchievementRate ?? summary.goalAchievementRate,
     };
+    const donorEvidence = (data.pulse?.evidence ?? []).filter((item) => item.isDonorFacing);
+    const donorGoals = (data.pulse?.goalProgress ?? [])
+      .filter((goal) => goal.target > 0)
+      .sort((a, b) => b.progress - a.progress)
+      .slice(0, 4);
+    const donorEntities = (data.pulse?.activeEntities ?? []).slice(0, 6);
 
     // Build beneficiary distribution for pie (top departments)
     const beneficiaryDist = DEPARTMENTS.map((d) => {
@@ -293,7 +299,77 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
           </div>
         </div>
 
+        {templateKey === "donor" && data.pulse ? (
+          <div style={{ padding: "12px 32px 16px" }}>
+            <div style={{ backgroundColor: "#ffffff", borderRadius: 18, padding: 20, boxShadow: "0 3px 12px rgba(27,42,94,0.08)", borderRight: "6px solid #d4a843" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 21, fontWeight: 900, color: "#1b2a5e" }}>أثر الدعم في هذا الشهر</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 1.7 }}>
+                    ملخص مبني على مؤشرات داعمين وشواهد أثر مختارة من RAWAHEL Pulse.
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, minWidth: 220 }}>
+                  <MiniStat label="مستفيد جديد" value={pulseTotals?.newBeneficiaries ?? 0} color="#2e7d6b" />
+                  <MiniStat label="شاهد أثر" value={donorEvidence.length} color="#d4a843" />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 14, marginTop: 16 }}>
+                <div style={{ backgroundColor: "#fffdf6", border: "1px solid #eadfbd", borderRadius: 14, padding: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: "#1b2a5e", marginBottom: 10 }}>أهداف استراتيجية قابلة للتتبع</div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {donorGoals.map((goal) => (
+                      <div key={goal.goalId}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11, fontWeight: 800 }}>
+                          <span style={{ color: "#16213e" }}>{goal.nameAr}</span>
+                          <span style={{ color: goal.status === "green" ? "#15803d" : goal.status === "amber" ? "#b45309" : "#b91c1c" }}>{nf(goal.progress)}%</span>
+                        </div>
+                        <div style={{ height: 7, borderRadius: 999, backgroundColor: "#eef2f7", marginTop: 5, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.min(100, goal.progress)}%`, borderRadius: 999, backgroundColor: "#2e7d6b" }} />
+                        </div>
+                      </div>
+                    ))}
+                    {donorGoals.length === 0 ? (
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>لم يتم ربط مؤشرات بالأهداف بعد</div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor: "#f7f8fb", borderRadius: 14, padding: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: "#1b2a5e", marginBottom: 10 }}>كيانات نشطة في الأثر</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                    {donorEntities.map((entity) => (
+                      <span key={entity.id} style={{ border: "1px solid #e5e7eb", borderRadius: 999, backgroundColor: "#ffffff", padding: "6px 9px", fontSize: 10.5, fontWeight: 800, color: "#1b2a5e" }}>
+                        {entity.nameAr}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: "#1b2a5e", marginBottom: 8 }}>قصص أثر مختارة</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                  {donorEvidence.slice(0, 3).map((item) => (
+                    <div key={item.id} style={{ border: "1px solid #eadfbd", borderRadius: 12, padding: 12, backgroundColor: "#fffdf6", minHeight: 92 }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1b2a5e", lineHeight: 1.45 }}>{item.titleAr}</div>
+                      <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6, lineHeight: 1.6 }}>
+                        {item.descriptionAr || "شاهد موثق قابل للمراجعة"}
+                      </div>
+                    </div>
+                  ))}
+                  {donorEvidence.length === 0 ? (
+                    <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "#9ca3af" }}>لا توجد قصص داعمين لهذا التقرير بعد.</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {/* ===== CHARTS ROW ===== */}
+        {templateKey !== "donor" ? (
         <div style={{ padding: "16px 32px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {/* Pie: beneficiary distribution */}
           <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 16, boxShadow: "0 2px 8px rgba(27,42,94,0.06)" }}>
@@ -379,8 +455,10 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
             </div>
           </div>
         </div>
+        ) : null}
 
         {/* ===== GOAL ACHIEVEMENT PROGRESS ===== */}
+        {templateKey !== "donor" ? (
         <div style={{ padding: "8px 32px 16px" }}>
           <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 18, boxShadow: "0 2px 8px rgba(27,42,94,0.06)" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#1b2a5e", marginBottom: 4 }}>
@@ -407,8 +485,10 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
             </div>
           </div>
         </div>
+        ) : null}
 
         {/* ===== DEPARTMENT ACHIEVEMENT CARDS ===== */}
+        {templateKey !== "donor" ? (
         <div style={{ padding: "0 32px 24px" }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "#1b2a5e", marginBottom: 10, textAlign: "center" }}>
             تفصيل الكيانات والعناصر
@@ -553,32 +633,6 @@ export const Infographic = forwardRef<HTMLDivElement, { data: InfographicData }>
             ))}
           </div>
         </div>
-
-        {templateKey === "donor" && data.pulse ? (
-          <div style={{ padding: "8px 32px 20px" }}>
-            <div style={{ backgroundColor: "#ffffff", borderRadius: 16, padding: 18, boxShadow: "0 2px 8px rgba(27,42,94,0.06)", borderRight: "5px solid #d4a843" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1b2a5e" }}>أثر الداعمين</div>
-                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>أرقام قابلة للمشاركة مع قصص وأدلة مختارة</div>
-                </div>
-                <div style={{ display: "flex", gap: 18 }}>
-                  <MiniStat label="كيانات نشطة" value={data.pulse.activeEntities.length} color="#1b2a5e" />
-                  <MiniStat label="أدلة داعمين" value={data.pulse.totals.donorFacingEvidenceCount ?? 0} color="#d4a843" />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                {data.pulse.evidence.filter((item) => item.isDonorFacing).slice(0, 3).map((item) => (
-                  <div key={item.id} style={{ border: "1px solid #eadfbd", borderRadius: 12, padding: 12, backgroundColor: "#fffdf6", minHeight: 84 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#1b2a5e", lineHeight: 1.4 }}>{item.titleAr}</div>
-                    <div style={{ fontSize: 10, color: "#6b7280", marginTop: 5, lineHeight: 1.5 }}>
-                      {item.descriptionAr || "دليل موثق قابل للمراجعة"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         ) : null}
 
         {templateKey === "annual" && data.pulse ? (

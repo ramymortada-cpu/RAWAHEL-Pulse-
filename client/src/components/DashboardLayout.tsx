@@ -28,6 +28,7 @@ import {
   FileBarChart,
   History,
   GitCompareArrows,
+  ImagePlus,
   Sheet as SheetIcon,
   Menu as MenuIcon,
   Boxes,
@@ -36,14 +37,17 @@ import {
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { useEffect, useState } from "react";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "لوحة النبض", path: "/" },
   { icon: FileBarChart, label: "التقارير", path: "/reports" },
-  { icon: Boxes, label: "الكيانات التنفيذية", path: "/items" },
-  { icon: Gauge, label: "المسارات والأهداف", path: "/pulse" },
-  { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/pulse" },
-  { icon: History, label: "تقارير الداعمين", path: "/reports" },
+  { icon: Boxes, label: "الكيانات التنفيذية", path: "/pulse#entities" },
+  { icon: Gauge, label: "المسارات والأهداف", path: "/pulse#strategy" },
+  { icon: Gauge, label: "المؤشرات", path: "/pulse#metrics" },
+  { icon: GitCompareArrows, label: "إدخال المؤشرات", path: "/pulse#values" },
+  { icon: ImagePlus, label: "شواهد الأثر", path: "/pulse#evidence" },
+  { icon: History, label: "تقارير الداعمين", path: "/reports#donor" },
   { icon: SheetIcon, label: "الإعدادات", path: "/integrations" },
 ];
 
@@ -102,11 +106,53 @@ export default function DashboardLayout({
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
+  const [currentHash, setCurrentHash] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.hash
+  );
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  useEffect(() => {
+    const syncHash = () => setCurrentHash(window.location.hash);
+    window.addEventListener("hashchange", syncHash);
+    window.addEventListener("popstate", syncHash);
+    return () => {
+      window.removeEventListener("hashchange", syncHash);
+      window.removeEventListener("popstate", syncHash);
+    };
+  }, []);
+
+  const splitMenuPath = (path: string) => {
+    const [base, hash] = path.split("#");
+    return { base, hash: hash ? `#${hash}` : "" };
+  };
+  const navigateTo = (path: string) => {
+    const { base, hash } = splitMenuPath(path);
+    setLocation(base);
+    window.setTimeout(() => {
+      if (hash) {
+        if (window.location.hash !== hash) {
+          window.history.pushState(null, "", `${base}${hash}`);
+        }
+        setCurrentHash(hash);
+        document.getElementById(`pulse-${hash.slice(1)}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      } else {
+        if (window.location.hash) {
+          window.history.pushState(null, "", base);
+        }
+        setCurrentHash("");
+      }
+    }, 0);
+  };
   const activeMenuItem =
     menuItems.find(
-      (item) => item.path === location || (item.path !== "/" && location.startsWith(item.path))
+      (item) => {
+        const { base, hash } = splitMenuPath(item.path);
+        if (hash) return location === base && currentHash === hash;
+        return item.path === location || (item.path !== "/" && location.startsWith(item.path) && !currentHash);
+      }
     ) ?? menuItems[0];
   const isMobile = useIsMobile();
 
@@ -130,14 +176,17 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         <SidebarContent className="gap-0 pt-3">
           <SidebarMenu className="px-3 py-1 gap-1.5">
             {menuItems.map((item) => {
+              const { base, hash } = splitMenuPath(item.path);
               const isActive =
-                location === item.path ||
-                (item.path !== "/" && location.startsWith(item.path));
+                hash
+                  ? location === base && currentHash === hash
+                  : location === item.path ||
+                    (item.path !== "/" && location.startsWith(item.path) && !currentHash);
               return (
                 <SidebarMenuItem key={`${item.label}-${item.path}`}>
                   <SidebarMenuButton
                     isActive={isActive}
-                    onClick={() => setLocation(item.path)}
+                    onClick={() => navigateTo(item.path)}
                     tooltip={item.label}
                     className="h-11 transition-all font-medium text-sidebar-foreground/85 hover:bg-white/10 data-[active=true]:bg-[#d4a843] data-[active=true]:text-[#1b2a5e] data-[active=true]:font-bold rounded-xl"
                   >

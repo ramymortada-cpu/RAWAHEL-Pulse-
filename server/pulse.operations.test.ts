@@ -7,6 +7,7 @@ import {
   createPulseStrategicGoal,
   createPulseStrategicTrack,
   getPulseDashboard,
+  getMetricsForEntity,
   getPulseMasterData,
   linkPulseGoalToMetrics,
   linkPulseEntityToGoals,
@@ -115,5 +116,55 @@ describe("RAWAHEL Pulse operations", () => {
     const refreshed = await getPulseMasterData();
     expect(refreshed.entityGoalLinks.some((link) => link.entityId === entityId && link.goalId === goalId)).toBe(true);
     expect(master.tracks.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("shows entity-specific KPI definitions only for their entity", async () => {
+    await seedPulseMasterData();
+    const stamp = Date.now();
+    const entityAId = await createPulseEntity({
+      key: `test_metric_owner_${stamp}`,
+      nameAr: "كيان مالك للمؤشر",
+      type: "initiative",
+      descriptionAr: "كيان له مؤشر خاص",
+      ownerName: "فريق الاختبار",
+      status: "active",
+      sortOrder: 1001,
+      color: "#2e7d6b",
+      icon: "Sparkles",
+      isActive: true,
+    });
+    const entityBId = await createPulseEntity({
+      key: `test_metric_other_${stamp}`,
+      nameAr: "كيان آخر",
+      type: "initiative",
+      descriptionAr: "كيان لا يجب أن يرى مؤشر غيره",
+      ownerName: "فريق الاختبار",
+      status: "active",
+      sortOrder: 1002,
+      color: "#4a90d9",
+      icon: "Building2",
+      isActive: true,
+    });
+    const metricDefinitionId = await createPulseMetricDefinition({
+      key: `entity_private_metric_${stamp}`,
+      entityId: entityAId,
+      appliesToType: null,
+      nameAr: "مؤشر خاص بكيان واحد",
+      descriptionAr: null,
+      unit: "count",
+      aggregation: "sum",
+      direction: "higher_is_better",
+      aggregationScope: "additive",
+      isCore: false,
+      isDonorFacing: true,
+      sortOrder: 1001,
+      isActive: true,
+    });
+
+    const metricsForA = await getMetricsForEntity(entityAId);
+    const metricsForB = await getMetricsForEntity(entityBId);
+
+    expect(metricsForA.map((metric) => metric.id)).toContain(metricDefinitionId);
+    expect(metricsForB.map((metric) => metric.id)).not.toContain(metricDefinitionId);
   });
 });

@@ -27,6 +27,7 @@ export default function GoalDetail() {
     .map((link) => link.entityId);
   const entities = (master?.entities ?? []).filter((entity) => linkedEntityIds.includes(entity.id));
   const progress = dashboard?.goalProgress.find((item) => item.goalId === goalId);
+  const linkedMetricNames = progress?.linkedMetricNames ?? [];
 
   if (isLoading) {
     return (
@@ -78,7 +79,8 @@ export default function GoalDetail() {
             <div>
               <h2 className="font-extrabold text-[#1b2a5e]">تقدم الهدف</h2>
               <p className="text-sm text-muted-foreground">
-                محسوب من مؤشرات الكيانات المرتبطة بالهدف
+                هذا الهدف يُحسب من هذه المؤشرات:{" "}
+                {linkedMetricNames.length > 0 ? linkedMetricNames.join("، ") : "لم يتم ربط مؤشرات بعد"}
               </p>
             </div>
             <div className="text-3xl font-extrabold text-[#2e7d6b]">{fmt(pct)}%</div>
@@ -95,6 +97,11 @@ export default function GoalDetail() {
               <div className="text-muted-foreground">المستهدف</div>
               <div className="font-extrabold">{fmt(goal.targetValue)} {goal.targetUnit}</div>
             </div>
+          </div>
+          <div className="mt-4 rounded-xl bg-[#f7f2e7] p-3 text-sm text-[#1b2a5e]">
+            كل نسبة استراتيجية هنا قابلة للتفسير لأنها تعتمد فقط على روابط
+            <span className="font-bold"> goal_metric_links </span>
+            الخاصة بهذا الهدف.
           </div>
         </div>
 
