@@ -167,6 +167,18 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getUserByEmail(email: string) {
+  const normalized = email.trim().toLowerCase();
+  const db = await getDb();
+  if (!db) {
+    return localUsers.find((user) => user.email?.toLowerCase() === normalized);
+  }
+
+  const result = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
 export async function listUsers() {
   const db = await getDb();
   if (!db) return [...localUsers].sort((a, b) => a.id - b.id);

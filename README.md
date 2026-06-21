@@ -23,11 +23,12 @@ RAWAHEL Pulse is an Arabic-first impact measurement and reporting system for Raw
 pnpm install
 pnpm check
 pnpm test
+pnpm readiness:production
 pnpm build
 pnpm dev
 ```
 
-RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugin, or injected browser debug assets. If OAuth environment variables are absent in non-production, the server provides a local admin session for development/review operation.
+RAWAHEL Pulse does not require any platform-specific runtime, Vite runtime plugin, or injected browser debug assets. If OAuth environment variables are absent in non-production, the server provides a local admin session for development/review operation. Production startup and `pnpm readiness:production` fail when required auth/database environment variables are missing.
 
 ## How To Add A New Entity
 
@@ -121,10 +122,17 @@ Current verification commands:
 ```bash
 pnpm check
 pnpm test
+pnpm readiness:production
 pnpm build
 ```
 
 ## Operator Guide
+
+For the free Render + Aiven production path, use:
+
+```text
+docs/RENDER_AIVEN_DEPLOYMENT_RUNBOOK.md
+```
 
 ### 1. How To Login As Admin
 
@@ -134,7 +142,7 @@ pnpm build
 4. Sign in through the configured OAuth portal.
 5. Confirm the user has one of the internal roles: `super_admin`, `admin`, `editor`, or `viewer`.
 
-Local development note: when `NODE_ENV` is not `production`, `OAUTH_SERVER_URL` is absent, and `RAWAHEL_DISABLE_LOCAL_ADMIN_FALLBACK` is not `1`, the server provides a local `super_admin` session for demo/review only. Production does not grant this fallback.
+Local development note: when `NODE_ENV` is not `production`, `OAUTH_SERVER_URL` is absent, and `RAWAHEL_DISABLE_LOCAL_ADMIN_FALLBACK` is not `1`, the server provides a local `super_admin` session for development/review only. Production does not grant this fallback.
 
 ### 2. How To Create/Edit An Entity
 
@@ -232,11 +240,13 @@ Server-side permission checks are enforced through `permissionProcedure`, `admin
 
 ### 11. Required Environment Variables
 
+Use `.env.example` as the production setup template. Do not commit real values.
+
 | Variable | Required | Notes |
 |---|---:|---|
 | `NODE_ENV` | Yes | Use `production` in production. |
-| `JWT_SECRET` | Yes in production | Signs/verifies session cookies. Do not use the local fallback secret in production. |
-| `DATABASE_URL` | Recommended/production | MySQL connection. Without it, local in-memory data is used for demo/review. |
+| `JWT_SECRET` | Yes in production | Signs/verifies session cookies. Must be at least 32 characters. Production refuses the local fallback secret. |
+| `DATABASE_URL` | Yes in production | MySQL connection. Without it, local in-memory data is used only outside production. |
 | `OAUTH_SERVER_URL` | Production auth | OAuth backend URL. Absence disables OAuth and only allows local fallback outside production. |
 | `VITE_OAUTH_PORTAL_URL` | Production auth UI | Frontend OAuth portal base URL. |
 | `VITE_APP_ID` | Production auth | OAuth app/project id. |
@@ -257,7 +267,7 @@ PDF and PNG exports are generated in the browser. If remote storage is not confi
 - Configure auth/session secrets before exposing `/admin` or `/pulse`.
 - Configure `EXTERNAL_SUBMISSION_BASE_URL` for manager links.
 - Confirm `NODE_ENV=production` so local admin fallback is disabled.
-- Run `pnpm check`, `pnpm test`, and `pnpm build` before release.
+- Run `pnpm check`, `pnpm test`, `pnpm readiness:production`, and `pnpm build` before release.
 - Verify no Manus/WZZRD runtime dependency is required.
 - Verify no raw external submission tokens are logged or stored.
 - Verify official dashboards/reports use approved data only.
@@ -271,6 +281,7 @@ PDF and PNG exports are generated in the browser. If remote storage is not confi
 - [ ] Storage environment variables are optional and documented.
 - [ ] Export local fallback documented.
 - [ ] External submission base URL configured.
+- [ ] `pnpm readiness:production` passes with the real production environment.
 - [ ] Production build passes.
 - [ ] No Manus/WZZRD dependencies are required at runtime.
 - [ ] No raw tokens are logged or stored.

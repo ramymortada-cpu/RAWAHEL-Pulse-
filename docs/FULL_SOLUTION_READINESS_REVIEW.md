@@ -57,6 +57,8 @@ Acceptance result:
 
 - Unauthenticated API callers are blocked from admin APIs.
 - Production without OAuth/session does not receive the local admin fallback.
+- Production startup refuses missing/weak required auth/database environment variables.
+- Production session signing refuses the local fallback secret.
 - External `/submit/:token` remains public and standalone.
 - Viewer edit attempts are blocked server-side.
 - Editor approval attempts are blocked server-side.
@@ -68,6 +70,9 @@ Evidence:
 - `shared/permissions.ts`
 - `server/_core/trpc.ts`
 - `server/_core/context.ts`
+- `server/_core/env.ts`
+- `server/_core/session.ts`
+- `server/production-hardening.test.ts`
 - `server/access-control.test.ts`
 - `client/src/components/DashboardLayout.tsx`
 - `client/src/pages/PublicSubmission.tsx`
@@ -182,6 +187,7 @@ Checklist:
 - Seed data loaded: required before first operator use.
 - Super Admin user exists: required before team use.
 - Auth/session secret configured: required in production.
+- Production readiness gate: `pnpm readiness:production` must pass with real production environment values.
 - Storage env vars optional but documented: confirmed.
 - Export local fallback documented: confirmed.
 - External submission base URL configured: recommended before sending links.
@@ -206,10 +212,22 @@ Checklist:
 | External route works without admin login | `server/access-control.test.ts`, `server/pulse.operations.test.ts` |
 | External token cannot submit another entity/report | `server/pulse.operations.test.ts` |
 | PDF/PNG export buttons render | `server/report.templates.test.ts` |
+| Production env rejects missing/weak secrets | `server/production-hardening.test.ts` |
+| Production readiness command exists | `package.json`, `scripts/production-readiness.ts` |
+
+Latest verification results:
+
+- `pnpm check`: passed.
+- `pnpm test`: passed, 94 tests across 10 files.
+- `pnpm build`: passed.
+- `pnpm readiness:production` without required env: failed as expected, proving the production gate blocks incomplete configuration.
+- `pnpm readiness:production` with required production env values: passed with a remote-storage warning only.
+- PDF export smoke: passed locally with `rawahel-pulse-monthly-2026-06.pdf`.
+- PNG export smoke: passed locally with `rawahel-pulse-monthly-2026-06.png`.
 
 ## 8. Remaining Risks
 
-- Browser-level manual PDF/PNG export smoke should be repeated with a running app and representative seeded data before production.
+- Browser-level PDF/PNG export smoke passed locally, but should be repeated with representative production-like data after deployment.
 - Production depends on correct OAuth, session secret, database, and initial Super Admin setup.
 - Optional remote storage is best-effort; local browser export is the safe fallback for full solution readiness.
-- The app is full-solution ready for controlled internal use after deployment checklist completion; the remaining work is production hardening and enterprise compliance evidence, not core solution completion.
+- The app is full-solution ready for controlled internal use after deployment checklist completion; the remaining work is live deployment verification and enterprise compliance evidence, not core solution completion.

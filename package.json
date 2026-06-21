@@ -10,6 +10,8 @@
     "check": "node node_modules/typescript/bin/tsc --noEmit",
     "format": "prettier --write .",
     "test": "node node_modules/vitest/vitest.mjs run",
+    "readiness:production": "NODE_ENV=production node node_modules/tsx/dist/cli.mjs scripts/production-readiness.ts",
+    "create:super-admin": "NODE_ENV=production node node_modules/tsx/dist/cli.mjs scripts/create-super-admin.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {

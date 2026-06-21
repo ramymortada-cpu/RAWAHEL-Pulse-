@@ -22,6 +22,7 @@ import {
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LOGO_NAVY, LOGO_WHITE } from "@/lib/brand";
+import { trpc } from "@/lib/trpc";
 import {
   LayoutDashboard,
   LogOut,
@@ -39,8 +40,10 @@ import {
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { useEffect, useState } from "react";
 import { roleLabelAr } from "@shared/permissions";
+import { toast } from "sonner";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "لوحة النبض", path: "/" },
@@ -61,7 +64,16 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { loading, user } = useAuth();
+  const { loading, user, refresh } = useAuth();
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const hasOAuth = Boolean(import.meta.env.VITE_OAUTH_PORTAL_URL && import.meta.env.VITE_APP_ID);
+  const login = trpc.auth.login.useMutation({
+    onSuccess: async () => {
+      toast.success("تم تسجيل الدخول");
+      await refresh();
+    },
+    onError: () => toast.error("بيانات الدخول غير صحيحة أو الدخول المحلي غير مفعّل"),
+  });
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
@@ -87,15 +99,47 @@ export default function DashboardLayout({
               RAWAHEL Pulse — نظام قياس الأثر والتقارير الشهرية لمؤسسة رواحل.
             </p>
           </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-[#1b2a5e] hover:bg-[#2c3f7a]"
-          >
-            الدخول إلى نبض رواحل
-          </Button>
+          {hasOAuth ? (
+            <Button
+              onClick={() => {
+                window.location.href = getLoginUrl();
+              }}
+              size="lg"
+              className="w-full shadow-lg hover:shadow-xl transition-all bg-[#1b2a5e] hover:bg-[#2c3f7a]"
+            >
+              الدخول إلى نبض رواحل
+            </Button>
+          ) : (
+            <div className="grid w-full gap-3">
+              <Input
+                dir="ltr"
+                type="email"
+                placeholder="admin@example.com"
+                value={loginForm.email}
+                onChange={(event) => setLoginForm((value) => ({ ...value, email: event.target.value }))}
+              />
+              <Input
+                dir="ltr"
+                type="password"
+                placeholder="Password"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm((value) => ({ ...value, password: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && loginForm.email && loginForm.password) {
+                    login.mutate(loginForm);
+                  }
+                }}
+              />
+              <Button
+                onClick={() => login.mutate(loginForm)}
+                disabled={!loginForm.email || !loginForm.password || login.isPending}
+                size="lg"
+                className="w-full shadow-lg hover:shadow-xl transition-all bg-[#1b2a5e] hover:bg-[#2c3f7a]"
+              >
+                دخول بالبريد وكلمة المرور
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
