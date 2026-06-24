@@ -1,0 +1,6 @@
+"Role","Permission","Route/API","Data access","Evidence","Risk","Recommendation"
+"super_admin","All permissions including user management/delete","/admin; admin.*; reports.delete","Platform-wide","shared/permissions.ts; AdminPortal","High blast radius","Restrict and audit"
+"admin","Manage reports/entities/strategy/KPIs/approvals/audit/export","/admin; /pulse; reports.*, pulse.*","Operational and approved report data","shared/permissions.ts","Misapproval risk","Use dual review for sensitive changes"
+"editor","Create/update reports, metric values, evidence, exports","/pulse; /reports","Editable report/entity data","shared/permissions.ts","Cannot approve but can enter data","Review submitted data"
+"viewer","Read-only authenticated access","Dashboards/reports/detail pages","Read-only operational/report data","shared/permissions.ts","Data visibility","Limit user provisioning"
+"public submitter","Scoped token submission only","/submit/:token; pulse public submit APIs","Single entity/report link scope","server/db.ts; PublicSubmission.tsx","Token abuse","Add expiry/rate limiting and manager SOP"

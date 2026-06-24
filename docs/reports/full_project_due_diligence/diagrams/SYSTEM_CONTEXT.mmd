@@ -1,0 +1,11 @@
+flowchart LR
+  Leadership["Rawahel leadership"] --> App["RAWAHEL Pulse SPA"]
+  Admin["Admin / Super Admin"] --> App
+  Editor["Editor"] --> App
+  Viewer["Viewer"] --> App
+  Manager["External entity manager"] --> Submit["/submit/:token"]
+  App --> API["Express + tRPC API"]
+  Submit --> API
+  API --> DB["MySQL via Drizzle"]
+  API --> OAuth["OAuth provider"]
+  API --> Forge["Optional Forge storage"]

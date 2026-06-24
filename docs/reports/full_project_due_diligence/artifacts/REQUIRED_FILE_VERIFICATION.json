@@ -1,0 +1,278 @@
+[
+  {
+    "file": "README.md",
+    "exists": true
+  },
+  {
+    "file": "00_AUDIT_METHOD_AND_SCOPE.md",
+    "exists": true
+  },
+  {
+    "file": "01_EXECUTIVE_SUMMARY.md",
+    "exists": true
+  },
+  {
+    "file": "02_PRODUCT_STRATEGY_AND_VALUE_PROPOSITION.md",
+    "exists": true
+  },
+  {
+    "file": "03_BUSINESS_MODEL_PRICING_AND_PROFITABILITY.md",
+    "exists": true
+  },
+  {
+    "file": "04_PROJECT_HISTORY_AND_BUILD_PHASES.md",
+    "exists": true
+  },
+  {
+    "file": "05_TECH_STACK_AND_DEPENDENCY_AUDIT.md",
+    "exists": true
+  },
+  {
+    "file": "06_PROJECT_STRUCTURE_AND_CODEBASE_MAP.md",
+    "exists": true
+  },
+  {
+    "file": "07_SYSTEM_ARCHITECTURE.md",
+    "exists": true
+  },
+  {
+    "file": "08_SITEMAP_INFORMATION_ARCHITECTURE_AND_USER_FLOWS.md",
+    "exists": true
+  },
+  {
+    "file": "09_WEB_DESIGN_UI_AND_UX_AUDIT.md",
+    "exists": true
+  },
+  {
+    "file": "10_FRONTEND_ENGINEERING_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "11_BACKEND_API_AND_DATABASE_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "12_AUTHENTICATION_AUTHORIZATION_AND_LOGIN_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "13_AI_BRAIN_AND_INTELLIGENT_ENGINES_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "14_FEATURES_MODULES_AND_BUSINESS_LOGIC_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "15_CYBERSECURITY_PRIVACY_AND_COMPLIANCE_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "16_INFORMATION_SECURITY_AND_DATA_PROTECTION_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "17_DEV_ENGINEERING_DEVOPS_AND_QA_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "18_PERFORMANCE_SCALABILITY_AND_RELIABILITY_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "19_ANALYTICS_SEO_ACCESSIBILITY_AND_GROWTH_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "20_OBSERVABILITY_OPERATIONS_AND_INCIDENT_RESPONSE.md",
+    "exists": true
+  },
+  {
+    "file": "21_LEGAL_PRIVACY_TERMS_AND_COMPLIANCE_READINESS.md",
+    "exists": true
+  },
+  {
+    "file": "22_ROADMAP_RISKS_AND_GAP_ANALYSIS.md",
+    "exists": true
+  },
+  {
+    "file": "23_INVESTOR_AND_STAKEHOLDER_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "24_RELEASE_READINESS_AND_GO_TO_MARKET_CHECKLIST.md",
+    "exists": true
+  },
+  {
+    "file": "25_APPENDICES_EVIDENCE_AND_COMMANDS.md",
+    "exists": true
+  },
+  {
+    "file": "DEVELOPER_ONBOARDING_GUIDE.md",
+    "exists": true
+  },
+  {
+    "file": "FINAL_AUDIT_NOTES.md",
+    "exists": true
+  },
+  {
+    "file": "inventories/REPOSITORY_FILE_TREE.md",
+    "exists": true
+  },
+  {
+    "file": "inventories/IMPORTANT_FILES_INDEX.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/COMMANDS_RUN.md",
+    "exists": true
+  },
+  {
+    "file": "inventories/DEPENDENCY_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/ROUTE_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/API_ENDPOINT_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/COMPONENT_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/DATABASE_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/ENVIRONMENT_VARIABLE_INVENTORY.md",
+    "exists": true
+  },
+  {
+    "file": "inventories/FEATURE_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/AI_SYSTEM_INVENTORY.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/SECURITY_CONTROL_MATRIX.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/RISK_REGISTER.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/PERMISSIONS_MATRIX.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/DATA_CLASSIFICATION_MATRIX.csv",
+    "exists": true
+  },
+  {
+    "file": "inventories/ANALYTICS_EVENT_TAXONOMY.csv",
+    "exists": true
+  },
+  {
+    "file": "diagrams/SYSTEM_CONTEXT.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/TECH_STACK_LAYERS.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/REQUEST_LIFECYCLE.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/DATA_FLOW.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/AUTH_FLOW.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/USER_ONBOARDING_FLOW.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/MAIN_USER_JOURNEY.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/AI_PIPELINE.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/DATABASE_ERD.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/DEPLOYMENT_ARCHITECTURE.mmd",
+    "exists": true
+  },
+  {
+    "file": "diagrams/THREAT_MODEL_BOUNDARIES.mmd",
+    "exists": true
+  },
+  {
+    "file": "security/AI_RED_TEAM_PLAN.md",
+    "exists": true
+  },
+  {
+    "file": "security/THREAT_MODEL.md",
+    "exists": true
+  },
+  {
+    "file": "security/OWASP_TOP_10_MAPPING.md",
+    "exists": true
+  },
+  {
+    "file": "security/SECURITY_HARDENING_BACKLOG.md",
+    "exists": true
+  },
+  {
+    "file": "security/SECRETS_BLOCKER_REPORT.md",
+    "exists": true
+  },
+  {
+    "file": "operations/INCIDENT_RESPONSE_RUNBOOK.md",
+    "exists": true
+  },
+  {
+    "file": "operations/DEPLOYMENT_RUNBOOK.md",
+    "exists": true
+  },
+  {
+    "file": "operations/BACKUP_AND_RESTORE_RUNBOOK.md",
+    "exists": true
+  },
+  {
+    "file": "source_code_bundle/SOURCE_CODE_BUNDLE_README.md",
+    "exists": true
+  },
+  {
+    "file": "source_code_bundle/SOURCE_CODE_MANIFEST.csv",
+    "exists": true
+  },
+  {
+    "file": "source_code_bundle/SOURCE_CODE_HASHES.sha256",
+    "exists": true
+  },
+  {
+    "file": "source_code_bundle/SOURCE_CODE_EXCLUSIONS.md",
+    "exists": true
+  },
+  {
+    "file": "source_code_bundle/SOURCE_CODE_SECRET_SCAN_SUMMARY.md",
+    "exists": true
+  }
+]

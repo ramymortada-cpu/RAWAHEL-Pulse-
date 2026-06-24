@@ -1,0 +1,7 @@
+flowchart LR
+  Source["Source repo"] --> Build["pnpm check/test/readiness/build"]
+  Build --> Node["Node/Express production server"]
+  Node --> Static["dist/public SPA"]
+  Node --> DB["MySQL DATABASE_URL"]
+  Node --> OAuth["OAUTH_SERVER_URL"]
+  Node --> Forge["Optional Forge storage"]

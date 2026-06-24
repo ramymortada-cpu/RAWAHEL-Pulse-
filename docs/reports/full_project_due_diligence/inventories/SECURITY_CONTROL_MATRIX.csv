@@ -1,0 +1,7 @@
+"Control area","Current implementation","Evidence","Standard mapping","Gap","Severity","Recommendation"
+"Authentication","OAuth/session cookies with local fallback only outside production","server/_core/session.ts; context.ts; env.ts","OWASP ASVS V2","MFA/SSO policy not documented","Medium","Document IdP policy and MFA"
+"Authorization","Role permissions and tRPC middleware","shared/permissions.ts; server/_core/trpc.ts","OWASP ASVS V4","Object-level policy docs limited","Medium","Add permission-to-data matrix"
+"Production config","assertProductionEnv/readiness command","server/_core/env.ts; scripts/production-readiness.ts","NIST PR.IP","Live env not verified","High","Run gate in CI/deploy"
+"Token handling","Submission raw token hashed in storage and scoped","server/db.ts; pulse operations tests","OWASP API security","No rate limiting found","Medium","Add rate limits/monitoring"
+"Audit logging","Audit logs for important actions","server/routers/admin.ts; server/routers/pulse.ts; audit_logs table","SOC2 CC7","Retention policy missing","Medium","Set retention and export policy"
+"Dependency/supply chain","Lockfile and package scripts exist","pnpm-lock.yaml; package.json","NIST SSDF","No automated dependency audit evidence","Medium","Add CI dependency scan"

@@ -1,0 +1,6 @@
+"Risk ID","Category","Risk","Evidence","Severity","Likelihood","Impact","Owner suggestion","Mitigation","Priority","Status"
+"R-001","Operations","Live production env not verified in this local audit","readiness gate only run locally with sample env","High","Medium","Deployment failure or unsafe config","DevOps","Run readiness gate on staging/prod with real secrets","P0","Open external task"
+"R-002","Security","No rate limiting/security header middleware found in clean repo","server/_core/index.ts; routers","High","Medium","Public token/API abuse","Backend/Security","Add rate limiting, headers, CSRF review","P1","Open"
+"R-003","Performance","Large Vite bundle warning","pnpm build output","Medium","High","Slower load/export UX","Frontend","Split export/report libraries","P1","Open"
+"R-004","Compliance","Retention/privacy/legal docs not found","docs/README/schema","Medium","Medium","Compliance gaps","Operations/Legal","Create privacy/retention/DPA docs","P1","Open"
+"R-005","DevOps","No CI workflow in clean subrepo","find .github none","Medium","Medium","Manual gates may be skipped","Engineering","Add GitHub Actions for check/test/build/readiness","P1","Open"

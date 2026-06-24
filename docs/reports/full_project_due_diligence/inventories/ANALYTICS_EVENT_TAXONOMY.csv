@@ -1,0 +1,5 @@
+"Event name","Trigger","User type","Page/feature","Properties","Business purpose","Priority","Implementation status"
+"report_created","Report period created","admin/editor","/reports","period,audience","Measure reporting operations","High","Not found in repository"
+"submission_link_generated","External link created","admin","/pulse/submission-links","entity,report","Track external data collection","High","Audit log exists, analytics not found"
+"submission_approved","Admin approves submission","admin","Submission review","link,status","Measure approval cycle","High","Audit log exists, analytics not found"
+"report_exported","PDF/PNG export clicked","admin/editor","/reports/:id/preview","type,template","Measure report delivery","High","Audit log/record export exists"

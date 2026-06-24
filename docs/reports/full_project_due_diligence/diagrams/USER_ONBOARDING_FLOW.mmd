@@ -1,0 +1,8 @@
+flowchart TD
+  Configure["Configure production env"] --> OAuth["OAuth login"]
+  OAuth --> User["User record / role"]
+  User --> Role{"Role"}
+  Role --> Super["super_admin manages users"]
+  Role --> Admin["admin approves/manages"]
+  Role --> Editor["editor enters data"]
+  Role --> Viewer["viewer reads reports"]

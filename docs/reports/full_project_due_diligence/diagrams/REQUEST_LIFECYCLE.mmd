@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant B as Browser
+  participant E as Express
+  participant T as tRPC procedure
+  participant D as DB
+  B->>E: HTTP /api/trpc request
+  E->>T: createContext authenticates session
+  T->>T: protected/admin/editor/permission middleware
+  T->>D: Drizzle/data-layer call
+  D-->>T: rows/domain data
+  T-->>B: SuperJSON response

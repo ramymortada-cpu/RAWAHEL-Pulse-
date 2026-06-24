@@ -1,0 +1,7 @@
+flowchart TB
+  PublicSubmit["Public /submit token boundary"] --> API["API trust boundary"]
+  Browser["Authenticated browser"] --> API
+  API --> DB["Database boundary"]
+  API --> OAuth["OAuth provider boundary"]
+  API --> Storage["Optional storage boundary"]
+  Operator["Production env/secrets boundary"] --> API

@@ -1,0 +1,8 @@
+flowchart TD
+  Strategy["Create tracks/goals/entities"] --> Metrics["Define/link KPIs"]
+  Metrics --> Report["Create report period"]
+  Report --> Link["Generate external submission link"]
+  Link --> Submit["Manager saves/submits data"]
+  Submit --> Review["Admin review/approve/revise/reject"]
+  Review --> Dashboard["Approved-only dashboard"]
+  Dashboard --> Export["PDF/PNG report export"]

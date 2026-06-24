@@ -1,0 +1,11 @@
+erDiagram
+  users ||--o{ reports : owns
+  reports ||--o{ metric_values : contains
+  reports ||--o{ evidence_assets : contains
+  reports ||--o{ submission_links : has
+  entities ||--o{ metric_values : reports
+  entities ||--o{ submission_links : scopes
+  strategic_tracks ||--o{ strategic_goals : groups
+  strategic_goals ||--o{ goal_metric_links : calculates
+  metric_definitions ||--o{ goal_metric_links : links
+  users ||--o{ audit_logs : acts

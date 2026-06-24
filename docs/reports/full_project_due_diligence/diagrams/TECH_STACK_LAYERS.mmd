@@ -1,0 +1,8 @@
+flowchart TB
+  UI["React 19 + Vite + Wouter + Radix/Tailwind"] --> ClientData["tRPC React Query"]
+  ClientData --> API["Express + tRPC"]
+  API --> Auth["OAuth + jose JWT cookies + RBAC"]
+  API --> Data["Drizzle ORM + MySQL"]
+  UI --> Export["modern-screenshot/html2canvas/jsPDF"]
+  API --> Storage["Optional Forge storage"]
+  Tooling["TypeScript, Vitest, esbuild, pnpm"] --> UI

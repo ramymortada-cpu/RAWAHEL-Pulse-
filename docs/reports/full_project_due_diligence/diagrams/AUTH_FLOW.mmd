@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant U as User
+  participant OAuth as OAuth Provider
+  participant API as Server
+  participant DB as DB
+  U->>OAuth: Sign in
+  OAuth-->>API: callback code/state
+  API->>OAuth: exchange code / get user info
+  API->>DB: upsert user
+  API-->>U: httpOnly session cookie
+  U->>API: tRPC call with cookie
+  API->>DB: load user and enforce role permissions

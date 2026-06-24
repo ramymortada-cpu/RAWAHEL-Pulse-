@@ -1,0 +1,8 @@
+flowchart LR
+  Admin["Admin/editor entry"] --> Values["metric_values"]
+  Manager["External submission token"] --> Draft["draft/submitted metric/evidence"]
+  AdminReview["Admin review"] --> Approved["approved metric/evidence"]
+  Draft --> AdminReview
+  Approved --> Dashboard["Pulse dashboard"]
+  Approved --> Reports["Donor/internal/board reports"]
+  Reports --> Export["PDF/PNG"]
