@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import type { User } from "../drizzle/schema";
 import { getUserByEmail, upsertUser } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -10,10 +11,16 @@ import { adminRouter } from "./routers/admin";
 import { pulseRouter } from "./routers/pulse";
 import { reportsRouter } from "./routers/reports";
 
+function publicUser(user: User | null | undefined) {
+  if (!user) return null;
+  const { passwordHash: _passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => publicUser(opts.ctx.user)),
     login: publicProcedure
       .input(z.object({
         email: z.string().email(),
@@ -36,7 +43,7 @@ export const appRouter = router({
           ...getSessionCookieOptions(ctx.req),
           maxAge: 1000 * 60 * 60 * 24 * 365,
         });
-        return { success: true, user } as const;
+        return { success: true, user: publicUser(user) } as const;
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);

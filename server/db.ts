@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2";
 import {
   auditLogs,
   entities,
@@ -53,10 +54,27 @@ import {
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+function createMysqlPool(databaseUrl: string) {
+  const url = new URL(databaseUrl);
+  const sslMode = url.searchParams.get("ssl-mode") ?? url.searchParams.get("sslmode");
+  const sslRequired = sslMode?.toUpperCase() === "REQUIRED";
+
+  return mysql.createPool({
+    host: url.hostname,
+    port: Number(url.port || 3306),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace(/^\//, ""),
+    waitForConnections: true,
+    connectionLimit: Number(process.env.DATABASE_CONNECTION_LIMIT || 10),
+    ssl: sslRequired ? { rejectUnauthorized: false } : undefined,
+  });
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _db = drizzle(createMysqlPool(process.env.DATABASE_URL));
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
